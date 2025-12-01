@@ -1,8 +1,10 @@
-import React from 'react'
+import { DeviceProvider } from './contexts/DeviceContext'
 
 const App = () => {
   return (
-    <div>App</div>
+    <DeviceProvider>
+      <div>App</div>
+    </DeviceProvider>
   )
 }
 
