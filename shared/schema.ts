@@ -91,7 +91,7 @@ export const insertPreferenceSchema = createInsertSchema(preferences).pick({
   dietary: true,
   cuisines: true,
   allergies: true,
-  flavorProfile: true,
+  flavors: true,
   dislikedIngredients: true,
 });
 

@@ -7,6 +7,15 @@ import { log } from './simple-logger.ts';
 
 
 export async function registerRoutes(app: Express): Promise<Server> {
+    // Test endpoint to verify device ID middleware is working
+    app.get('/api/device-id', (req: Request, res: Response) => {
+        res.json({
+            deviceId: req.deviceId,
+            source: req.cookies?.deviceId ? 'cookie' : req.header('X-Device-ID') ? 'header' : 'generated',
+            timestamp: new Date().toISOString()
+        });
+    });
+
     app.post('/api/preferences', async (req: Request, res: Response) => {
         try {
             // Extract deviceId from request
