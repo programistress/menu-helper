@@ -12,22 +12,22 @@ export function Toaster() {
   const { toasts } = useToast() //list of active toasts from the hook 
 
   return (
-    <ToastProvider> // enables toast
+    <ToastProvider>
       {toasts.map(function ({ id, title, description, action, ...props }) { // loop through each toast and render it
         return (
-          <Toast key={id} {...props}> // container for the toast
+          <Toast key={id} {...props}>
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
                 <ToastDescription>{description}</ToastDescription>
               )}
             </div>
-            {action} // optional action button
+            {action}
             <ToastClose />
           </Toast>
         )
       })}
-      <ToastViewport /> // positions toast on screen
+      <ToastViewport />
     </ToastProvider>
   )
 }

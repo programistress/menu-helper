@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import StepIndicator from "./StepIndicator";
 
 interface PreferencesStepProps {
     preferences: {
@@ -15,6 +16,7 @@ interface PreferencesStepProps {
         flavors: string[];
         dislikedIngredients: string[];
     }) => void;
+    onNextStep?: () => void;
     isLoading: boolean;
 }
 
@@ -87,7 +89,7 @@ const CATEGORY_META = {
     }
 };
 
-export default function PreferencesStep({ preferences, onSubmit, isLoading }: PreferencesStepProps) {
+export default function PreferencesStep({ preferences, onSubmit, onNextStep, isLoading }: PreferencesStepProps) {
     const [formData, setFormData] = useState({
         dietary: preferences.dietary || [],
         cuisines: preferences.cuisines || [],
@@ -121,12 +123,29 @@ export default function PreferencesStep({ preferences, onSubmit, isLoading }: Pr
 
     return (
         <div className="min-h-screen bg-stone-50">
-            <div className="w-full max-w-3xl mx-auto px-6 py-16">
+            {/* Step Indicator */}
+            <StepIndicator currentStep={1} />
+            
+            <div className="w-full max-w-3xl mx-auto px-6 py-8">
                 {/* Header */}
                 <div className="mb-12">
-                    <h1 className="text-4xl font-light text-stone-900 tracking-tight mb-3">
-                        Food Preferences
-                    </h1>
+                    <div className="flex items-center justify-between gap-4 mb-3">
+                        <h1 className="text-4xl font-light text-stone-900 tracking-tight">
+                            Food Preferences
+                        </h1>
+                        {onNextStep && (
+                            <button
+                                onClick={onNextStep}
+                                disabled={isLoading}
+                                className="py-2 px-4 text-stone-500 text-sm font-medium hover:text-stone-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 flex-shrink-0"
+                            >
+                                Skip for now
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
                     <p className="text-stone-500 text-lg">
                         Help us personalize your dish recommendations
                     </p>
@@ -201,12 +220,12 @@ export default function PreferencesStep({ preferences, onSubmit, isLoading }: Pr
                     </div>
                 </div>
 
-                {/* Submit Button */}
+                {/* Navigation Buttons */}
                 <div className="mt-14 pt-8 border-t border-stone-200">
                     <button
                         onClick={handleSubmit}
                         disabled={isLoading}
-                        className="w-full py-4 bg-stone-900 text-white font-medium tracking-wide rounded-lg hover:bg-stone-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-4 bg-stone-900 text-white font-medium tracking-wide rounded-lg hover:bg-stone-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isLoading ? (
                             <span className="flex items-center justify-center gap-3">
@@ -217,7 +236,12 @@ export default function PreferencesStep({ preferences, onSubmit, isLoading }: Pr
                                 Saving...
                             </span>
                         ) : (
-                            "Save Preferences"
+                            <>
+                                Save & Continue
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </>
                         )}
                     </button>
                 </div>

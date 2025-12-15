@@ -3,10 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDevice } from "@/contexts/DeviceContext";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Card, CardContent } from "@/components/ui/card";
 import PreferencesStep from "@/components/menu-scanner/PreferencesStep";
 import UploadStep from "@/components/menu-scanner/UploadStep";
-import { Button } from "@/components/ui/button";
 import RecommendationsStep from "@/components/menu-scanner/RecommendationsStep";
 
 type Dish = {
@@ -43,7 +41,13 @@ export default function Menu() {
         flavors: [],
         dislikedIngredients: []
     });
-    const [detectedDishes, setDetectedDishes] = useState<Dish[]>([]);
+    const [detectedDishes, setDetectedDishes] = useState<Dish[]>([
+        { id: 1, name: "Spaghetti Carbonara", description: "A classic Italian dish with spaghetti, eggs, cheese, and bacon.", imageUrl: "https://example.com/spaghetti-carbonara.jpg" },
+        { id: 2, name: "Chicken Alfredo", description: "A creamy pasta dish with chicken, fettuccine, and Alfredo sauce.", imageUrl: "https://example.com/chicken-alfredo.jpg" },
+        { id: 3, name: "Beef Stew", description: "A hearty stew with beef, carrots, potatoes, and onions.", imageUrl: "https://example.com/beef-stew.jpg" },
+        { id: 4, name: "Vegetable Stir Fry", description: "A healthy stir fry with a variety of vegetables.", imageUrl: "https://example.com/vegetable-stir-fry.jpg" },
+        { id: 5, name: "Salmon with Vegetables", description: "A healthy dish with salmon, vegetables, and a lemon sauce.", imageUrl: "https://example.com/salmon-with-vegetables.jpg" },
+    ]);
     const [currentRecommendations, setCurrentRecommendations] = useState<Recommendation[]>([]);
     const { toast } = useToast();
 
@@ -224,136 +228,40 @@ export default function Menu() {
     };
 
     return (
-        <div className="p-6 sm:p-8 lg:p-10 max-w-6xl mx-auto">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Menu Scanner</h1>
-                <p className="text-gray-600 dark:text-gray-300 text-lg">
-                    Scan menus to get personalized dish recommendations
-                </p>
-            </div>
-
-            {/* Progress Bar */}
-            <Card className="mb-8 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-                <CardContent className="p-4">
-                    <div className="w-full max-w-4xl mx-auto">
-                        <div className="flex justify-between items-center relative">
-                            {/* Progress Bar Line */}
-                            <div className="absolute top-1/2 transform -translate-y-1/2 h-0.5 bg-gray-200 dark:bg-gray-700 w-full"></div>
-                            <div className="absolute top-1/2 transform -translate-y-1/2 h-0.5 bg-violet-600 dark:bg-violet-500" style={{ width: `${((currentStep - 1) / 2) * 100}%` }}></div>
-
-                            {/* Steps */}
-                            <div className={`relative flex items-center justify-center w-10 h-10 rounded-full z-10 cursor-pointer transition-colors ${currentStep >= 1
-                                ? 'bg-violet-600 dark:bg-violet-500 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                                }`}
-                                onClick={() => setCurrentStep(1)}
-                            >
-                                1
-                            </div>
-                            <div className={`relative flex items-center justify-center w-10 h-10 rounded-full z-10 cursor-pointer transition-colors ${currentStep >= 2
-                                ? 'bg-violet-600 dark:bg-violet-500 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                                }`}
-                                onClick={() => currentStep >= 2 ? setCurrentStep(2) : null}
-                            >
-                                2
-                            </div>
-                            <div className={`relative flex items-center justify-center w-10 h-10 rounded-full z-10 cursor-pointer transition-colors ${currentStep >= 3
-                                ? 'bg-violet-600 dark:bg-violet-500 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                                }`}
-                                onClick={() => currentStep >= 3 ? setCurrentStep(3) : null}
-                            >
-                                3
-                            </div>
-                        </div>
-
-                        <div className="flex justify-between items-center mt-2 text-xs text-gray-600 dark:text-gray-300">
-                            <div className="text-center w-10">Preferences</div>
-                            <div className={`text-center w-10 ${currentStep >= 2 ? 'text-gray-900 dark:text-gray-200' : ''}`}>Menu Upload</div>
-                            <div className={`text-center w-10 ${currentStep >= 3 ? 'text-gray-900 dark:text-gray-200' : ''}`}>Recommendations</div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Step Content */}
-            <Card className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-                <CardContent className="p-6">
-                    {currentStep === 1 && (
-                        <PreferencesStep
-                            preferences={userPreferences}
-                            onSubmit={handlePreferencesSubmit}
-                            isLoading={savePreferencesMutation.isPending}
-                        />
-                    )}
-                    {currentStep === 2 && (
-                        <div>
-                            <UploadStep
-                                onDishesDetected={handleDishesDetected}
-                                detectedDishes={detectedDishes}
-                                onGetRecommendations={() => {
-                                    if (detectedDishes.length > 0) {
-                                        recommendationsMutation.mutate();
-                                    } else {
-                                        toast({
-                                            title: "No dishes detected",
-                                            description: "Please scan a menu before getting recommendations.",
-                                            variant: "destructive"
-                                        });
-                                    }
-                                }}
-                                isLoading={recommendationsMutation.isPending}
-                            />
-                            {/* Back button for step 2 */}
-                            <div className="flex justify-start mt-6">
-                                <Button
-                                    variant="outline"
-                                    onClick={previousStep}
-                                    className="flex items-center gap-2"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        className="h-4 w-4"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                    Back to Preferences
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                    {currentStep === 3 && (
-                        <div>
-                            <RecommendationsStep
-                                recommendations={currentRecommendations}
-                            />
-                            {/* Back button for step 3 */}
-                            <div className="flex justify-start mt-6">
-                                <Button
-                                    variant="outline"
-                                    onClick={previousStep}
-                                    className="flex items-center gap-2"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        className="h-4 w-4"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                    Back to Menu Upload
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
+        <>
+            {currentStep === 1 && (
+                <PreferencesStep
+                    preferences={userPreferences}
+                    onSubmit={handlePreferencesSubmit}
+                    onNextStep={nextStep}
+                    isLoading={savePreferencesMutation.isPending}
+                />
+            )}
+            {currentStep === 2 && (
+                <UploadStep
+                    onDishesDetected={handleDishesDetected}
+                    detectedDishes={detectedDishes}
+                    onGetRecommendations={() => {
+                        if (detectedDishes.length > 0) {
+                            recommendationsMutation.mutate();
+                        } else {
+                            toast({
+                                title: "No dishes detected",
+                                description: "Please scan a menu before getting recommendations.",
+                                variant: "destructive"
+                            });
+                        }
+                    }}
+                    onPreviousStep={previousStep}
+                    isLoading={recommendationsMutation.isPending}
+                />
+            )}
+            {currentStep === 3 && (
+                <RecommendationsStep
+                    recommendations={currentRecommendations}
+                    onPreviousStep={previousStep}
+                />
+            )}
+        </>
     )
 }
