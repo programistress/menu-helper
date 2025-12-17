@@ -71,6 +71,7 @@ export class VercelKVRateLimiter {
     private readonly limits = {
         'openai': { perMinute: 20, perDay: 500 },
         'google-vision': { perMinute: 100, perDay: 5000 },
+        'google-search': { perMinute: 20, perDay: 100 },
     };
 
     /**
