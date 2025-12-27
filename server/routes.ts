@@ -6,6 +6,8 @@ import { log } from './simple-logger.ts';
 import multer from "multer";
 import { analyzeMenuImage } from "./openai-vision.ts";
 import { searchDishImage } from "./image-search.ts";
+import { getOpenAIDescription } from "./openai-descriptions.ts";
+import { getOpenAIRecommendations } from "./openai-recommendations.ts";
 
 // In-memory storage for multer
 const upload = multer({
@@ -134,15 +136,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             const dishesWithDetails = await Promise.all(
                 dishNames.map(async (dishName) => {
-                    // Search for dish image (with caching)
+                    const normalizedName = dishName.toLowerCase().trim();
+                    
+                    // Check cache first for both image and description
+                    const cachedDish = await storage.findDishInCache(normalizedName);
+                    
+                    // If we have a complete cache hit (image + description), use it
+                    if (cachedDish?.imageUrls?.length && cachedDish?.description) {
+                        log(`Full cache hit for "${dishName}"`, 'menu-analyze');
+                        return {
+                            name: dishName,
+                            description: cachedDish.description,
+                            imageUrl: cachedDish.imageUrls[0],
+                            metadata: {
+                                source: cachedDish.source,
+                                thumbnailUrl: cachedDish.imageUrls[1] || null
+                            }
+                        };
+                    }
+                    
+                    // Search for image (will also cache the result)
                     const imageResult = await searchDishImage(dishName);
-
-                    // Check if we have cached description
-                    const cachedDish = await storage.findDishInCache(dishName.toLowerCase().trim());
+                    
+                    // Get description: use cached, or generate with OpenAI
+                    let description = cachedDish?.description;
+                    if (!description) {
+                        log(`No cached description for "${dishName}", generating with OpenAI`, 'menu-analyze');
+                        description = await getOpenAIDescription(dishName);
+                        
+                        // Cache the generated description to database
+                        try {
+                            await storage.cacheDish({
+                                dishName: normalizedName,
+                                description,
+                                imageUrls: imageResult.imageUrl 
+                                    ? [imageResult.imageUrl, imageResult.thumbnailUrl].filter((url): url is string => url !== null)
+                                    : undefined,
+                                source: 'openai'
+                            });
+                            log(`Cached OpenAI description for "${dishName}"`, 'menu-analyze');
+                        } catch (cacheError) {
+                            log(`Failed to cache description: ${cacheError}`, 'menu-analyze');
+                        }
+                    }
 
                     return {
                         name: dishName,
-                        description: cachedDish?.description || `A delicious ${dishName}`,
+                        description,
                         imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
                         metadata: {
                             source: imageResult.source,
@@ -169,13 +209,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    app.post('api/recommendations', async (req: Request, res: Response)) => {
+    // Get personalized dish recommendations based on menu and user preferences
+    app.post('/api/recommendations', async (req: Request, res: Response) => {
         try {
-            
+            const deviceId = req.deviceId;
+
+            if (!deviceId) {
+                return res.status(400).json({ message: 'Device ID is required' });
+            }
+
+            // Get dishes from request body (from menu scan)
+            const { dishes } = req.body;
+
+            if (!dishes || !Array.isArray(dishes) || dishes.length === 0) {
+                return res.status(400).json({ 
+                    message: 'No dishes provided. Please scan a menu first.' 
+                });
+            }
+
+            log(`Generating recommendations for ${dishes.length} dishes`, 'recommendations');
+
+            // Get user preferences from database
+            const userPreferences = await storage.getPreferencesByDeviceId(deviceId);
+
+            if (!userPreferences) {
+                return res.status(400).json({ 
+                    message: 'No preferences found. Please set your food preferences first.' 
+                });
+            }
+
+            // Format dishes for the recommendation function
+            const menuDishes = dishes.map((dish: any) => ({
+                name: dish.name,
+                description: dish.description,
+                imageUrl: dish.imageUrl,
+                metadata: dish.metadata
+            }));
+
+            // Format preferences for the recommendation function
+            const preferences = {
+                dietary: userPreferences.dietary || [],
+                cuisines: userPreferences.cuisines || [],
+                allergies: userPreferences.allergies || [],
+                flavors: userPreferences.flavors || [],
+                dislikedIngredients: userPreferences.dislikedIngredients || []
+            };
+
+            log(`User preferences: dietary=${preferences.dietary?.length || 0}, cuisines=${preferences.cuisines?.length || 0}, allergies=${preferences.allergies?.length || 0}`, 'recommendations');
+
+            // Get AI-powered recommendations
+            const recommendations = await getOpenAIRecommendations(
+                menuDishes,
+                preferences,
+                deviceId
+            );
+
+            log(`Generated ${recommendations.length} recommendations`, 'recommendations');
+
+            return res.status(200).json({
+                recommendations,
+                message: `Found ${recommendations.length} dishes that match your preferences!`
+            });
+
         } catch (error) {
+            log(`Error generating recommendations: ${error instanceof Error ? error.message : String(error)}`, 'recommendations');
             
+            // Handle specific error types
+            if (error instanceof Error) {
+                if (error.message.includes('Rate limit')) {
+                    return res.status(429).json({
+                        message: 'Too many requests. Please try again in a moment.',
+                        error: error.message
+                    });
+                }
+                if (error.message.includes('API key')) {
+                    return res.status(503).json({
+                        message: 'Recommendation service temporarily unavailable.',
+                        error: 'Service configuration error'
+                    });
+                }
+            }
+
+            return res.status(500).json({
+                message: 'Error generating recommendations',
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
-    }
+    });
 
     // Create HTTP server
     const server = createServer(app);
