@@ -124,28 +124,6 @@ export const insertDishCacheSchema = createInsertSchema(dishCache).pick({
 export type DishCache = typeof dishCache.$inferSelect;
 export type InsertDishCache = z.infer<typeof insertDishCacheSchema>;
 
-// Saved dishes schema - now with reference to dish_cache table
-export const savedDishes = createTable("saved_dishes", {
-  id: serial("id").primaryKey(),
-  deviceId: text("device_id").notNull(),
-  dishCacheId: integer("dish_cache_id").references(() => dishCache.id),
-  dishName: text("dish_name").notNull(),
-  imageUrls: text("image_urls").array(),
-  description: text("description"),
-  savedAt: timestamp("saved_at").defaultNow(),
-});
-
-export const insertSavedDishSchema = createInsertSchema(savedDishes).pick({
-  deviceId: true,
-  dishCacheId: true,
-  dishName: true,
-  imageUrls: true,
-  description: true,
-});
-
-export type SavedDish = typeof savedDishes.$inferSelect;
-export type InsertSavedDish = z.infer<typeof insertSavedDishSchema>;
-
 // Recommendation types are defined as interfaces since we're using ephemeral recommendations
 export interface Recommendation {
   dishName: string;

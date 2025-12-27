@@ -1,7 +1,6 @@
 import {
   users, type User, type InsertUser,
   preferences, type Preference, type InsertPreference,
-  savedDishes, type SavedDish, type InsertSavedDish,
   dishCache, type DishCache, type InsertDishCache
 } from "../shared/schema.js";
 import { db } from "./db.js";
@@ -36,12 +35,8 @@ export interface IStorage {
   findDishById(dishId: string): Promise<DishCache | undefined>;
   getDishCacheById(id: number): Promise<DishCache | undefined>;
   cacheDish(dishData: CacheDishInput): Promise<DishCache>;
-  //getRecentlyAddedDishes(limit?: number): Promise<DishCache[]>;
 
-  // Saved Dishes methods
-  // getSavedDishesByDeviceId(deviceId: string): Promise<SavedDish[]>;
-  // findSavedDish(deviceId: string, dishName: string): Promise<SavedDish | undefined>;
-  // createSavedDish(savedDish: InsertSavedDish): Promise<SavedDish>;
+
 }
 
 export class DatabaseStorage implements IStorage {
