@@ -26,10 +26,10 @@ export default async function handler(req, res) {
     try {
         const formidable = await import('formidable'); // Parses multipart form data (file uploads)
         const fs = await import('fs/promises'); // Read the uploaded file
-        const { analyzeMenuImage } = await import('../../server/openai-vision.js');
-        const { searchDishImage } = await import('../../server/image-search.js');
-        const { getOpenAIDescription } = await import('../../server/openai-descriptions.js');
-        const { storage } = await import('../../server/storage.js');
+        const { analyzeMenuImage } = await import('../server/openai-vision.js');
+        const { searchDishImage } = await import('../server/image-search.js');
+        const { getOpenAIDescription } = await import('../server/openai-descriptions.js');
+        const { storage } = await import('../server/storage.js');
 
         console.log('Modules imported successfully');
 

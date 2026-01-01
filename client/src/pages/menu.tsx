@@ -95,23 +95,6 @@ export default function Menu() {
         }
     }, [existingPreferences]);
 
-    const saveDishesMutation = useMutation({
-        mutationFn: async (dishes: Dish[]) => {
-            const response = await apiRequest('POST', '/api/dishes', dishes);
-            return response.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/dishes'] });
-        },
-        onError: (error) => {
-            toast({
-                title: "Error",
-                description: `Failed to save dishes: ${error instanceof Error ? error.message : String(error)}`,
-                variant: "destructive"
-            });
-        }
-    });
-
     // Save preferences
     const savePreferencesMutation = useMutation({
         // the function that runs when triggered
@@ -155,7 +138,7 @@ export default function Menu() {
             // Use the existing userPreferences from state
             // Include the detected dishes and preferences in the request
             console.log("Sending dishes for OpenAI recommendations:", detectedDishes.length);
-            const response = await apiRequest('POST', '/api/direct/recommendations', {
+            const response = await apiRequest('POST', '/api/recommendations', {
                 dishes: detectedDishes,
                 preferences: userPreferences
             });
@@ -210,10 +193,7 @@ export default function Menu() {
         console.log("Dishes detected:", dishes.length, "dishes");
         if (dishes && dishes.length > 0) {
             setDetectedDishes(dishes);
-            saveDishesMutation.mutate(dishes);
 
-            // No longer automatically process recommendations
-            // Let the user review the detected dishes and click the button manually
             toast({
                 title: "Dishes detected!",
                 description: `We found ${dishes.length} dish${dishes.length === 1 ? '' : 'es'}. Review them and click 'Get Recommendations' when ready.`,

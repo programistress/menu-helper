@@ -288,7 +288,7 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
       formData.append("image", blob);
 
       // Send to backend
-      const response = await fetch("/api/dishes/analyze", {
+      const response = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
       });

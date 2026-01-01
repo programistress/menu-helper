@@ -4,7 +4,6 @@ export default async function handler(req, res) {
     console.log('recommendations.js called');
     console.log('Method:', req.method);
 
-    // CORS headers
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
