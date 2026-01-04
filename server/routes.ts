@@ -30,8 +30,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     app.post('/api/preferences', async (req: Request, res: Response) => {
         try {
-            // Extract deviceId from request
-            const deviceId = req.deviceId;
+            // Extract deviceId from request (middleware or query param fallback)
+            const deviceId = req.deviceId || (req.query.deviceId as string);
 
             if (!deviceId) {
                 return res.status(400).json({ message: 'Device ID is required' });
@@ -67,8 +67,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     app.get('/api/preferences', async (req: Request, res: Response) => {
         try {
-            // Extract deviceId from request
-            const deviceId = req.deviceId;
+            // Extract deviceId from request (middleware or query param fallback)
+            const deviceId = req.deviceId || (req.query.deviceId as string);
 
             if (!deviceId) {
                 return res.status(400).json({ message: 'Device ID is required' });
@@ -91,8 +91,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
     });
 
-    // Upload and analyze menu image
-    app.post('/api/menu/analyze', upload.single('image'), async (req: Request, res: Response) => {
+    // Upload and analyze menu image (also aliased as /api/analyze for frontend compatibility)
+    app.post('/api/analyze', upload.single('image'), async (req: Request, res: Response) => {
         try {
             if (!req.file) {
                 return res.status(400).json({ message: 'No image file provided' });
@@ -149,7 +149,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                             description: cachedDish.description,
                             imageUrl: cachedDish.imageUrls[0],
                             metadata: {
-                                source: cachedDish.source,
                                 thumbnailUrl: cachedDish.imageUrls[1] || null
                             }
                         };
@@ -171,8 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                                 description,
                                 imageUrls: imageResult.imageUrl 
                                     ? [imageResult.imageUrl, imageResult.thumbnailUrl].filter((url): url is string => url !== null)
-                                    : undefined,
-                                source: 'openai'
+                                    : undefined
                             });
                             log(`Cached OpenAI description for "${dishName}"`, 'menu-analyze');
                         } catch (cacheError) {
@@ -185,7 +183,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         description,
                         imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
                         metadata: {
-                            source: imageResult.source,
                             thumbnailUrl: imageResult.thumbnailUrl
                         }
                     };
@@ -212,7 +209,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Get personalized dish recommendations based on menu and user preferences
     app.post('/api/recommendations', async (req: Request, res: Response) => {
         try {
-            const deviceId = req.deviceId;
+            // Extract deviceId from request (middleware or query param fallback)
+            const deviceId = req.deviceId || (req.query.deviceId as string);
 
             if (!deviceId) {
                 return res.status(400).json({ message: 'Device ID is required' });

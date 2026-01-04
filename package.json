@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npx tsx server/index.ts",
     "build": "vite build",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",

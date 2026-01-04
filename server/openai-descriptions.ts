@@ -1,13 +1,21 @@
+import 'dotenv/config';
 import OpenAI from "openai";
 import { log } from './simple-logger.js';
 import { rateLimiter } from './rate-limiter.js';
 
-// Configure OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 2,
-    timeout: 15000
-});
+// Configure OpenAI client (lazy initialization)
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            maxRetries: 2,
+            timeout: 15000
+        });
+    }
+    return openai;
+}
 
 // In-memory cache to reduce API calls and improve performance
 const descriptionCache = new Map<string, string>();
@@ -47,26 +55,19 @@ export async function getOpenAIDescription(name: string): Promise<string> {
         }
 
         // Generate a high-quality description using OpenAI
-        const response = await openai.chat.completions.create({
+        const response = await getOpenAIClient().chat.completions.create({
             model: "gpt-4o", // Using the latest model
             messages: [
                 {
                     role: "system",
-                    content: `You are a culinary expert creating concise, appetizing dish descriptions.
-          Create descriptions that highlight the dish's key ingredients, flavor profile, and cooking style in 2-3 sentences.
-          Focus on what makes the dish appealing and distinctive.
-          Avoid excessive marketing language, overly technical jargon, or lengthy descriptions.
-          Keep it informative yet enticing.`
+                    content: `Write a 5-8 word flavor description. No dish name. No punctuation. Just key flavors/ingredients.`
                 },
                 {
                     role: "user",
-                    content: `Please provide a concise 2-3 sentence description for the dish "${name}".
-          Focus on main ingredients, flavor characteristics, and what makes this dish special.
-          Keep your response under 100 words and be appetizing but not overly promotional.
-          Only return the description text with no additional commentary.`
+                    content: `"${name}" - give 5-8 words describing taste/ingredients only. Example: "tender beef in rich red wine"`
                 }
             ],
-            max_tokens: 150,
+            max_tokens: 50,
             temperature: 0.7
         });
 

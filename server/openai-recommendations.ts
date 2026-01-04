@@ -1,13 +1,21 @@
+import 'dotenv/config';
 import OpenAI from "openai";
 import { log } from './simple-logger.js';
 import { rateLimiter } from './rate-limiter.js';
 
-// Configure OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 2,
-    timeout: 20000
-});
+// Configure OpenAI client (lazy initialization)
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            maxRetries: 2,
+            timeout: 20000
+        });
+    }
+    return openai;
+}
 
 // dish from a scanned menu
 interface MenuDish {
@@ -111,7 +119,7 @@ export async function getOpenAIRecommendations(
                 formattedDisliked
             ].filter(text => text.length > 0).join(' ');
 
-            const response = await openai.chat.completions.create({
+            const response = await getOpenAIClient().chat.completions.create({
                 model: "gpt-4o",
                 messages: [
                     {

@@ -1,10 +1,19 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Load .env from project root
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+// Debug: check if API key loaded
+console.log('OpenAI API Key loaded:', process.env.OPENAI_API_KEY ? 'Yes (length: ' + process.env.OPENAI_API_KEY.length + ')' : 'No');
+
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
-// import { registerRoutes } from "./routes.ts";
 import { setupVite, serveStatic, log } from "./vite.ts";
 import { registerRoutes } from './routes.ts';
-// import { ensureDeviceId } from "./middleware/deviceId.js";
+import { ensureDeviceId } from "./middleware/deviceId.ts";
 
 const app = express();
 
@@ -12,7 +21,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
-// app.use(ensureDeviceId);
+app.use(ensureDeviceId);
 
 // Logging middleware for API requests
 app.use((req, res, next) => {

@@ -133,7 +133,6 @@ export default async function handler(req, res) {
                         description: cachedDish.description,
                         imageUrl: cachedDish.imageUrls[0],
                         metadata: {
-                            source: cachedDish.source,
                             thumbnailUrl: cachedDish.imageUrls[1] || null
                         }
                     };
@@ -155,8 +154,7 @@ export default async function handler(req, res) {
                             description,
                             imageUrls: imageResult.imageUrl
                                 ? [imageResult.imageUrl, imageResult.thumbnailUrl].filter(Boolean)
-                                : undefined,
-                            source: 'openai'
+                                : undefined
                         });
                     } catch (cacheError) {
                         console.log('Cache error (non-fatal):', cacheError.message);
@@ -168,7 +166,6 @@ export default async function handler(req, res) {
                     description: description || ' ',
                     imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
                     metadata: {
-                        source: imageResult.source,
                         thumbnailUrl: imageResult.thumbnailUrl
                     }
                 };

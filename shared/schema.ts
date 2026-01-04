@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, varchar, pgSchema } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, timestamp, pgSchema } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -105,7 +105,6 @@ export const dishCache = createTable("dish_cache", {
   dishId: text("dish_id").notNull().unique(),
   imageUrls: text("image_urls").array(),
   description: text("description"),
-  source: varchar("source", { length: 20 }).notNull(), //  'openai', 'bing', 'google'
   metadata: jsonb("metadata"), // { cuisine, spiciness, ingredients }
   cachedAt: timestamp("cached_at").defaultNow(),
   expiresAt: timestamp("expires_at"), // Cache expiration time
@@ -116,7 +115,6 @@ export const insertDishCacheSchema = createInsertSchema(dishCache).pick({
   dishId: true,
   imageUrls: true,
   description: true,
-  source: true,
   metadata: true,
   expiresAt: true,
 });

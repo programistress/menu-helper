@@ -41,13 +41,7 @@ export default function Menu() {
         flavors: [],
         dislikedIngredients: []
     });
-    const [detectedDishes, setDetectedDishes] = useState<Dish[]>([
-        { id: 1, name: "Spaghetti Carbonara", description: "A classic Italian dish with spaghetti, eggs, cheese, and bacon.", imageUrl: "https://example.com/spaghetti-carbonara.jpg" },
-        { id: 2, name: "Chicken Alfredo", description: "A creamy pasta dish with chicken, fettuccine, and Alfredo sauce.", imageUrl: "https://example.com/chicken-alfredo.jpg" },
-        { id: 3, name: "Beef Stew", description: "A hearty stew with beef, carrots, potatoes, and onions.", imageUrl: "https://example.com/beef-stew.jpg" },
-        { id: 4, name: "Vegetable Stir Fry", description: "A healthy stir fry with a variety of vegetables.", imageUrl: "https://example.com/vegetable-stir-fry.jpg" },
-        { id: 5, name: "Salmon with Vegetables", description: "A healthy dish with salmon, vegetables, and a lemon sauce.", imageUrl: "https://example.com/salmon-with-vegetables.jpg" },
-    ]);
+    const [detectedDishes, setDetectedDishes] = useState<Dish[]>([]);
     const [currentRecommendations, setCurrentRecommendations] = useState<Recommendation[]>([]);
     const { toast } = useToast();
 
@@ -138,15 +132,17 @@ export default function Menu() {
             // Use the existing userPreferences from state
             // Include the detected dishes and preferences in the request
             console.log("Sending dishes for OpenAI recommendations:", detectedDishes.length);
-            const response = await apiRequest('POST', '/api/recommendations', {
+            const response = await apiRequest('POST', `/api/recommendations?deviceId=${deviceId}`, {
                 dishes: detectedDishes,
                 preferences: userPreferences
             });
             const data = await response.json();
 
-            setCurrentRecommendations(data);
+            // API returns { recommendations: [...] }, extract the array
+            const recommendations = data.recommendations || data;
+            setCurrentRecommendations(recommendations);
 
-            if (data && (Array.isArray(data) && data.length > 0)) {
+            if (recommendations && Array.isArray(recommendations) && recommendations.length > 0) {
                 nextStep(); // Only proceed if we got actual recommendations
             } else {
                 toast({

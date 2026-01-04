@@ -1,14 +1,22 @@
+import 'dotenv/config';
 import OpenAI from "openai";
 import { log } from "./simple-logger.js";
 import { rateLimiter } from "./rate-limiter.js";
 import { analyzeImage } from "./vision.js";
 
-// Configure OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    maxRetries: 2, // automatically retries the request if it fails
-    timeout: 15000 // max time to wait for response 
-});
+// Configure OpenAI client (lazy initialization to ensure env vars are loaded)
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            maxRetries: 2,
+            timeout: 15000
+        });
+    }
+    return openai;
+}
 
 // This flag allows easier turning on/off of the OpenAI API
 const ENABLE_OPENAI = process.env.ENABLE_OPENAI !== "false";
@@ -52,7 +60,7 @@ export async function analyzeMenuImage(base64Image: string): Promise<{
 
         log("Processing image with OpenAI Vision API", "vision");
 
-        const response = await openai.chat.completions.create({
+        const response = await getOpenAIClient().chat.completions.create({
             model: "gpt-4o",
             messages: [
                 {

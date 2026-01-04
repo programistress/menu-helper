@@ -134,9 +134,6 @@ export class DatabaseStorage implements IStorage {
       const normalizedName = dishData.dishName.toLowerCase().trim();
       const dishId = dishData.dishId || `dish_${normalizedName.replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}`;
 
-      // Ensure source has a default value if not provided
-      const source = dishData.source || 'openai';
-
       // Set default expiration (90 days from now)
       const expiresAt = dishData.expiresAt || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
@@ -144,7 +141,6 @@ export class DatabaseStorage implements IStorage {
       const dishDataWithId = {
         ...dishData,
         dishId,
-        source,
         expiresAt
       };
 
@@ -160,7 +156,6 @@ export class DatabaseStorage implements IStorage {
             dishName: dishData.dishName || existingDish.dishName,
             imageUrls: dishData.imageUrls || existingDish.imageUrls,
             description: dishData.description || existingDish.description,
-            source: source,
             metadata: dishData.metadata || existingDish.metadata,
             expiresAt: expiresAt,
             cachedAt: new Date()

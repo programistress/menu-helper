@@ -58,7 +58,6 @@ export interface DishImageResult {
     imageUrl: string | null;
     thumbnailUrl: string | null;
     title: string | null;
-    source: string | null;
 }
 
 // ============================================
@@ -74,8 +73,7 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
     const emptyResult: DishImageResult = {
         imageUrl: null,
         thumbnailUrl: null,
-        title: null,
-        source: null
+        title: null
     };
 
     try {
@@ -85,10 +83,16 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             return emptyResult;
         }
 
-        // Check if API is configured
+        // Check if API is configured - use Unsplash fallback if not
         if (!GOOGLE_API_KEY || !GOOGLE_CX) {
-            log("Google Search API is not properly configured", "image-search");
-            return emptyResult;
+            log("Google Search API not configured, using Unsplash fallback", "image-search");
+            // Use Unsplash Source for free food images (no API key needed)
+            const query = encodeURIComponent(dishName.trim() + " food");
+            return {
+                imageUrl: `https://source.unsplash.com/400x300/?${query}`,
+                thumbnailUrl: `https://source.unsplash.com/200x150/?${query}`,
+                title: dishName
+            };
         }
 
         // Validate input
@@ -107,8 +111,7 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             return {
                 imageUrl: cached.imageUrls[0] || null,
                 thumbnailUrl: cached.imageUrls[1] || null, // Second URL can be thumbnail
-                title: cached.dishName,
-                source: cached.source
+                title: cached.dishName
             };
         }
 
@@ -173,8 +176,7 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
         const result: DishImageResult = {
             imageUrl: firstResult.link,
             thumbnailUrl: firstResult.image?.thumbnailLink || null,
-            title: firstResult.title,
-            source: firstResult.displayLink
+            title: firstResult.title
         };
 
         log(`Found image for ${dishName}: ${result.imageUrl}`, "image-search");
@@ -183,8 +185,7 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
         try {
             await storage.cacheDish({
                 dishName: normalizedName,  // Use normalized name for consistent cache keys
-                imageUrls: [result.imageUrl, result.thumbnailUrl].filter((url): url is string => url !== null),
-                source: 'google'
+                imageUrls: [result.imageUrl, result.thumbnailUrl].filter((url): url is string => url !== null)
             });
         } catch (cacheError) {
             // Don't fail the whole request if caching fails
