@@ -65,14 +65,30 @@ export async function analyzeMenuImage(base64Image: string): Promise<{
             messages: [
                 {
                     role: "system",
-                    content: "You are a precise menu reader assistant. Your task is to identify dish names from restaurant menu photos. Extract the names of dishes/food items you can clearly read. Do not include prices, or section headers. If text is unclear or partially visible, skip it."
+                    content: "You are a precise menu reader. Extract dish names from menu photos. Combine food-type categories with items (Toast, Salad, Bowl, etc). IGNORE generic categories (Main Dish, Appetizers, Sides, Starters, Mains, etc)."
                 },
                 {
                     role: "user",
                     content: [
                         {
                             type: "text",
-                            text: "This is a photo of a restaurant menu. Extract all dish names that are clearly visible and readable.\n\nRespond with a JSON object containing:\n\n1. 'dishNames': An array of dish names exactly as written on the menu. Include only food/drink item names, not prices, descriptions, or category headers.\n\n2. 'isMenu': A boolean - true if this image shows a restaurant menu, false otherwise.\n\nIMPORTANT: Only include dish names you can read with certainty. Do not guess or invent names. If the image is not a menu, return an empty array for dishNames and false for isMenu."
+                            text: `Extract dish names from this menu.
+
+APPEND these food-type categories to items:
+Toast, Salad, Bowl, Sandwich, Burger, Wrap, Pizza, Pasta, Soup, Taco, Curry, Steak, Smoothie, Coffee, Juice
+
+Examples: "Avocado" under "TOAST" → "Avocado Toast"
+
+IGNORE these generic categories (don't append):
+Main Dish, Mains, Appetizers, Starters, Sides, Entrees, Specials, Chef's Picks, Favorites, Small Plates, Large Plates, Breakfast, Lunch, Dinner
+
+Respond with JSON:
+{
+  "dishNames": ["Dish name 1", "Dish name 2"],
+  "isMenu": true/false
+}
+
+Only include dishes you can clearly read. Make each name descriptive enough to search for an image.`
                         },
                         {
                             type: "image_url",

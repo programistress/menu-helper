@@ -6,8 +6,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
-// Debug: check if API key loaded
-console.log('OpenAI API Key loaded:', process.env.OPENAI_API_KEY ? 'Yes (length: ' + process.env.OPENAI_API_KEY.length + ')' : 'No');
+// Debug: check if API keys loaded
+console.log('\n🔑 API Keys Status:');
+console.log('  OpenAI API Key:', process.env.OPENAI_API_KEY ? '✅ Yes (length: ' + process.env.OPENAI_API_KEY.length + ')' : '❌ No');
+console.log('  Google Search API Key:', process.env.GOOGLE_SEARCH_API_KEY ? '✅ Yes (length: ' + process.env.GOOGLE_SEARCH_API_KEY.length + ')' : '❌ No');
+console.log('  Google Search CX:', process.env.GOOGLE_SEARCH_CX ? '✅ Yes (value: ' + process.env.GOOGLE_SEARCH_CX + ')' : '❌ No');
+console.log('  Database URL:', process.env.DATABASE_URL ? '✅ Yes' : '❌ No');
+console.log('');
 
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";

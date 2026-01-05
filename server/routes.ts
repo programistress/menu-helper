@@ -155,7 +155,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     }
                     
                     // Search for image (will also cache the result)
+                    console.log(`📸 [ROUTE] Calling searchDishImage for: "${dishName}"`);
                     const imageResult = await searchDishImage(dishName);
+                    console.log(`📸 [ROUTE] Image result for "${dishName}":`, JSON.stringify(imageResult));
                     
                     // Get description: use cached, or generate with OpenAI
                     let description = cachedDish?.description;
@@ -178,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         }
                     }
 
-                    return {
+                    const finalDish = {
                         name: dishName,
                         description,
                         imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
@@ -186,6 +188,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                             thumbnailUrl: imageResult.thumbnailUrl
                         }
                     };
+                    console.log(`📸 [ROUTE] Final dish object for "${dishName}":`, JSON.stringify(finalDish));
+                    return finalDish;
                 })
             );
 

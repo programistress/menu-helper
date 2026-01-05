@@ -69,6 +69,12 @@ export interface DishImageResult {
  * @returns DishImageResult with image URLs or null values if not found
 */
 export async function searchDishImage(dishName: string): Promise<DishImageResult> {
+    console.log(`\n🖼️ [IMAGE-SEARCH] ========== START ==========`);
+    console.log(`🖼️ [IMAGE-SEARCH] Searching for: "${dishName}"`);
+    console.log(`🖼️ [IMAGE-SEARCH] ENABLE_IMAGE_SEARCH: ${ENABLE_IMAGE_SEARCH}`);
+    console.log(`🖼️ [IMAGE-SEARCH] GOOGLE_API_KEY configured: ${!!GOOGLE_API_KEY}`);
+    console.log(`🖼️ [IMAGE-SEARCH] GOOGLE_CX configured: ${!!GOOGLE_CX}`);
+    
     // Default empty result
     const emptyResult: DishImageResult = {
         imageUrl: null,
@@ -79,20 +85,17 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
     try {
         // Check if feature is enabled
         if (!ENABLE_IMAGE_SEARCH) {
-            log("Image search is disabled by configuration", "image-search");
+            console.log("🖼️ [IMAGE-SEARCH] ❌ Image search is DISABLED by configuration");
             return emptyResult;
         }
 
-        // Check if API is configured - use Unsplash fallback if not
+        // Check if API is configured
         if (!GOOGLE_API_KEY || !GOOGLE_CX) {
-            log("Google Search API not configured, using Unsplash fallback", "image-search");
-            // Use Unsplash Source for free food images (no API key needed)
-            const query = encodeURIComponent(dishName.trim() + " food");
-            return {
-                imageUrl: `https://source.unsplash.com/400x300/?${query}`,
-                thumbnailUrl: `https://source.unsplash.com/200x150/?${query}`,
-                title: dishName
-            };
+            console.log("🖼️ [IMAGE-SEARCH] ❌ MISSING CONFIG:");
+            console.log("🖼️ [IMAGE-SEARCH]   GOOGLE_SEARCH_API_KEY:", GOOGLE_API_KEY ? "set" : "NOT SET");
+            console.log("🖼️ [IMAGE-SEARCH]   GOOGLE_SEARCH_CX:", GOOGLE_CX ? "set" : "NOT SET");
+            console.log("🖼️ [IMAGE-SEARCH] ========== END ==========\n");
+            return emptyResult;
         }
 
         // Validate input
