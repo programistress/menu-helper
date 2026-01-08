@@ -69,9 +69,9 @@ async function getKV(): Promise<KVStore> {
  */
 export class VercelKVRateLimiter {
     private readonly limits = {
-        'openai': { perMinute: 20, perDay: 500 },
+        'openai': { perMinute: 100, perDay: 2000 },
         'google-vision': { perMinute: 100, perDay: 5000 },
-        'google-search': { perMinute: 20, perDay: 100 },
+        'google-search': { perMinute: 60, perDay: 500 },
     };
 
     /**

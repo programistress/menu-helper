@@ -65,7 +65,8 @@ export default function Menu() {
             }
             const data = await response.json();
             console.log('Preferences fetched:', data);
-            return data;
+            // API returns preferences directly, wrap it for consistency
+            return { preferences: data };
         },
         staleTime: 30000,
         enabled: !deviceLoading && !!deviceId, // Only run query when device ID is available
@@ -229,6 +230,9 @@ export default function Menu() {
                         }
                     }}
                     onPreviousStep={previousStep}
+                    onScanAnotherMenu={() => {
+                        setDetectedDishes([]);
+                    }}
                     isLoading={recommendationsMutation.isPending}
                 />
             )}

@@ -1,5 +1,7 @@
 import { Sparkles, ChefHat, ArrowLeft, RotateCcw } from "lucide-react";
 import StepIndicator from "./StepIndicator";
+import DishDetailModal from "./DishDetailModal";
+import { useState } from "react";
 
 interface Recommendation {
     id?: number;
@@ -8,6 +10,11 @@ interface Recommendation {
     imageUrl: string;
     matchScore?: number;
     matchReason?: string;
+    metadata?: {
+        thumbnailUrl?: string | null;
+        allImageUrls?: string[];
+        [key: string]: unknown;
+    };
 }
 
 interface RecommendationsStepProps {
@@ -17,19 +24,24 @@ interface RecommendationsStepProps {
 }
 
 function RecommendationCard({ 
-    recommendation 
+    recommendation,
+    onClick
 }: { 
-    recommendation: Recommendation; 
+    recommendation: Recommendation;
+    onClick: () => void;
 }) {
     return (
-        <div className="relative bg-white rounded-2xl overflow-hidden border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
+        <button 
+            onClick={onClick}
+            className="relative bg-white rounded-2xl overflow-hidden border border-stone-200 shadow-sm hover:shadow-lg hover:border-stone-400 transition-all duration-300 flex flex-col h-full text-left cursor-pointer"
+        >
             {/* Image Section */}
             <div className="relative h-48 sm:h-56 overflow-hidden bg-stone-100 flex-shrink-0">
                 {recommendation.imageUrl ? (
                     <img
                         src={recommendation.imageUrl}
                         alt={recommendation.name}
-                        className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         onError={(e) => {
                             (e.target as HTMLImageElement).src = 'https://placehold.co/400x300/f5f5f4/a8a29e?text=Delicious+Dish';
                         }}
@@ -39,6 +51,10 @@ function RecommendationCard({
                         <ChefHat className="w-16 h-16 text-stone-300" />
                     </div>
                 )}
+                {/* Tap hint overlay */}
+                <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs rounded-full backdrop-blur-sm">
+                    Tap for details
+                </div>
             </div>
 
             {/* Content Section */}
@@ -65,7 +81,7 @@ function RecommendationCard({
                     </div>
                 )}
             </div>
-        </div>
+        </button>
     );
 }
 
@@ -74,6 +90,7 @@ export default function RecommendationsStep({
     onPreviousStep, 
     isLoading = false 
 }: RecommendationsStepProps) {
+    const [selectedDish, setSelectedDish] = useState<Recommendation | null>(null);
     const hasRecommendations = recommendations && recommendations.length > 0;
 
     return (
@@ -121,6 +138,7 @@ export default function RecommendationsStep({
                             <RecommendationCard
                                 key={rec.id || index}
                                 recommendation={rec}
+                                onClick={() => setSelectedDish(rec)}
                             />
                         ))}
                     </div>
@@ -159,12 +177,19 @@ export default function RecommendationsStep({
                                 className="py-4 px-6 border border-stone-300 text-stone-600 font-medium tracking-wide rounded-lg hover:bg-stone-100 transition-colors duration-200 flex items-center justify-center gap-2"
                             >
                                 <ArrowLeft className="h-5 w-5" />
-                                Scan Another Menu
+                                Back to Menu Scan
                             </button>
                         )}
                     </div>
                 </div>
             </div>
+
+            {/* Dish Detail Modal */}
+            <DishDetailModal
+                dish={selectedDish}
+                isOpen={!!selectedDish}
+                onClose={() => setSelectedDish(null)}
+            />
         </div>
     );
 }

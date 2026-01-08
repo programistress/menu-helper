@@ -23,7 +23,8 @@ function normalizeDishName(dishName: string): string {
  * Build an optimized search query for food images
  */
 function buildSearchQuery(dishName: string): string {
-    return `${dishName.trim()} food dish photo`;
+    // Add "restaurant" and "plated" for better food photography results
+    return `${dishName.trim()} dish`;
 }
 
 // metadata about the image
@@ -58,6 +59,7 @@ export interface DishImageResult {
     imageUrl: string | null;
     thumbnailUrl: string | null;
     title: string | null;
+    allImageUrls: string[];  // Array of all usable image URLs
 }
 
 // ============================================
@@ -79,7 +81,8 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
     const emptyResult: DishImageResult = {
         imageUrl: null,
         thumbnailUrl: null,
-        title: null
+        title: null,
+        allImageUrls: []
     };
 
     try {
@@ -114,7 +117,8 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             return {
                 imageUrl: cached.imageUrls[0] || null,
                 thumbnailUrl: cached.imageUrls[1] || null, // Second URL can be thumbnail
-                title: cached.dishName
+                title: cached.dishName,
+                allImageUrls: cached.imageUrls || []
             };
         }
 
@@ -173,22 +177,54 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             return emptyResult;
         }
 
-        // Get the first (best) result
-        const firstResult = data.items[0];
+        const blockedDomains = [
+            'fbsbx.com',      
+            'facebook.com',
+            'fbcdn.net',
+            'instagram.com',
+            'cdninstagram.com',
+            'pinterest.com',
+            'pinimg.com',
+            'twitter.com',
+            'twimg.com',
+            'yelp.com',        
+            'yelpcdn.com',
+            'tripadvisor.com',
+            'tacdn.com',
+            'youtube.com',        
+            'ytimg.com',
+            'youtu.be',
+        ];
+
+        // Find all usable results (not from blocked domains) - up to 3 images
+        const usableResults = data.items.filter(item => {
+            const url = item.link.toLowerCase();
+            return !blockedDomains.some(domain => url.includes(domain));
+        }).slice(0, 3);  // Take up to 3 usable images
+
+        if (usableResults.length === 0) {
+            log(`All image results from blocked domains for: ${dishName}`, "image-search");
+            return emptyResult;
+        }
+
+        // Collect all image URLs
+        const allImageUrls = usableResults.map(item => item.link);
+        const firstResult = usableResults[0];
 
         const result: DishImageResult = {
             imageUrl: firstResult.link,
             thumbnailUrl: firstResult.image?.thumbnailLink || null,
-            title: firstResult.title
+            title: firstResult.title,
+            allImageUrls
         };
 
-        log(`Found image for ${dishName}: ${result.imageUrl}`, "image-search");
+        log(`Found ${allImageUrls.length} images for ${dishName}: ${result.imageUrl}`, "image-search");
 
-        // Cache the result in database using normalized name
+        // Cache all image URLs in database using normalized name
         try {
             await storage.cacheDish({
                 dishName: normalizedName,  // Use normalized name for consistent cache keys
-                imageUrls: [result.imageUrl, result.thumbnailUrl].filter((url): url is string => url !== null)
+                imageUrls: allImageUrls  // Store all image URLs
             });
         } catch (cacheError) {
             // Don't fail the whole request if caching fails

@@ -149,7 +149,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                             description: cachedDish.description,
                             imageUrl: cachedDish.imageUrls[0],
                             metadata: {
-                                thumbnailUrl: cachedDish.imageUrls[1] || null
+                                thumbnailUrl: cachedDish.imageUrls[1] || null,
+                                allImageUrls: cachedDish.imageUrls || []
                             }
                         };
                     }
@@ -162,7 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     // Get description: use cached, or generate with OpenAI
                     let description = cachedDish?.description;
                     if (!description) {
-                        log(`No cached description for "${dishName}", generating with OpenAI`, 'menu-analyze');
+                        log(`[DB CACHE] Miss for "${dishName}" - calling OpenAI`, 'menu-analyze');
                         description = await getOpenAIDescription(dishName);
                         
                         // Cache the generated description to database
@@ -185,7 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         description,
                         imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
                         metadata: {
-                            thumbnailUrl: imageResult.thumbnailUrl
+                            thumbnailUrl: imageResult.thumbnailUrl,
+                            allImageUrls: imageResult.allImageUrls || []
                         }
                     };
                     console.log(`📸 [ROUTE] Final dish object for "${dishName}":`, JSON.stringify(finalDish));

@@ -65,7 +65,7 @@ export async function analyzeMenuImage(base64Image: string): Promise<{
             messages: [
                 {
                     role: "system",
-                    content: "You are a precise menu reader. Extract dish names from menu photos. Combine food-type categories with items (Toast, Salad, Bowl, etc). IGNORE generic categories (Main Dish, Appetizers, Sides, Starters, Mains, etc)."
+                    content: "You are a precise menu reader and translator. Extract dish names from menu photos and ALWAYS translate them to English. Combine food-type categories with items (Toast, Salad, Bowl, etc). IGNORE generic categories (Main Dish, Appetizers, Sides, Starters, Mains, etc)."
                 },
                 {
                     role: "user",
@@ -73,6 +73,15 @@ export async function analyzeMenuImage(base64Image: string): Promise<{
                         {
                             type: "text",
                             text: `Extract dish names from this menu.
+
+IMPORTANT: If the menu is in a foreign language (Chinese, Japanese, Korean, Spanish, French, etc.), TRANSLATE all dish names to English. Use the common English name for the dish.
+
+Examples of translation:
+- "宫保鸡丁" → "Kung Pao Chicken"
+- "麻婆豆腐" → "Mapo Tofu"  
+- "炒饭" → "Fried Rice"
+- "担担面" → "Dan Dan Noodles"
+- "Pad Thai" → "Pad Thai" (already English/common name)
 
 APPEND these food-type categories to items:
 Toast, Salad, Bowl, Sandwich, Burger, Wrap, Pizza, Pasta, Soup, Taco, Curry, Steak, Smoothie, Coffee, Juice
@@ -84,11 +93,11 @@ Main Dish, Mains, Appetizers, Starters, Sides, Entrees, Specials, Chef's Picks, 
 
 Respond with JSON:
 {
-  "dishNames": ["Dish name 1", "Dish name 2"],
+  "dishNames": ["English Dish Name 1", "English Dish Name 2"],
   "isMenu": true/false
 }
 
-Only include dishes you can clearly read. Make each name descriptive enough to search for an image.`
+Only include dishes you can clearly read. All names MUST be in English for image search.`
                         },
                         {
                             type: "image_url",
@@ -122,18 +131,28 @@ Only include dishes you can clearly read. Make each name descriptive enough to s
             isMenu: result.isMenu || false
         };
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check for unsupported image format - this should be shown to user
+        if (errorMessage.includes('unsupported image') || 
+            errorMessage.includes('image format') ||
+            errorMessage.includes("['png', 'jpeg', 'gif', 'webp']")) {
+            log(`OpenAI Vision API unsupported image format: ${errorMessage}`, "vision");
+            throw new Error('Unsupported image format. Please upload a PNG, JPEG, GIF, or WebP image.');
+        }
+
         // Check if this is a rate limit error from the API itself
         if (error instanceof Error && (
-            error.message.includes('rate limit') ||
-            error.message.includes('429') ||
-            error.message.includes('too many requests') ||
-            error.message.includes('quota exceeded')
+            errorMessage.includes('rate limit') ||
+            errorMessage.includes('429') ||
+            errorMessage.includes('too many requests') ||
+            errorMessage.includes('quota exceeded')
         )) {
-            log(`OpenAI Vision API rate limit error: ${error.message}`, "vision");
+            log(`OpenAI Vision API rate limit error: ${errorMessage}`, "vision");
             return await fallbackToGoogleVision(base64Image);
         }
 
-        log(`Error analyzing image with OpenAI: ${error instanceof Error ? error.message : String(error)}`, "vision");
+        log(`Error analyzing image with OpenAI: ${errorMessage}`, "vision");
 
         // Try the fallback option if OpenAI fails
         return await fallbackToGoogleVision(base64Image);

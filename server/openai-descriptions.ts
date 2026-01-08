@@ -33,14 +33,14 @@ export async function getOpenAIDescription(name: string): Promise<string> {
         // Create a cache key
         const cacheKey = `${name}`.toLowerCase();
 
-        // Check if we have this description cached in memory
+        // Check if we have this description cached in memory (session only)
         if (descriptionCache.has(cacheKey)) {
             const cachedDescription = descriptionCache.get(cacheKey);
-            log(`Using cached description for "${name}"`, 'openai');
+            log(`[MEMORY CACHE] Hit for "${name}"`, 'openai');
             return cachedDescription!;
         }
 
-        log(`Generating fresh OpenAI description for "${name}"`, 'openai');
+        log(`[OPENAI API] Generating description for "${name}"`, 'openai');
 
         // Check if OpenAI is configured
         if (!process.env.OPENAI_API_KEY) {

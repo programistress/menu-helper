@@ -1,5 +1,6 @@
-import { Camera, LoaderPinwheel, RotateCcw, X, Upload } from "lucide-react";
+import { Camera, LoaderPinwheel, RotateCcw, X, Upload, RefreshCw } from "lucide-react";
 import StepIndicator from "./StepIndicator";
+import DishDetailModal from "./DishDetailModal";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -8,7 +9,11 @@ interface Dish {
   name: string;
   description: string;
   imageUrl: string;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    thumbnailUrl?: string | null;
+    allImageUrls?: string[];
+    [key: string]: unknown;
+  };
 }
 
 interface UploadStepProps {
@@ -16,10 +21,11 @@ interface UploadStepProps {
   detectedDishes: Dish[];
   onGetRecommendations?: () => void;
   onPreviousStep?: () => void;
+  onScanAnotherMenu?: () => void;
   isLoading?: boolean;
 }
 
-export default function UploadStep({ onDishesDetected, detectedDishes, onGetRecommendations, onPreviousStep, isLoading = false }: UploadStepProps) {
+export default function UploadStep({ onDishesDetected, detectedDishes, onGetRecommendations, onPreviousStep, onScanAnotherMenu, isLoading = false }: UploadStepProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraLoading, setCameraLoading] = useState(false);
@@ -30,6 +36,7 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [uploadedImage, setUploadedImage] = useState<string>("");
+  const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const { toast } = useToast();
 
   // Check if device is mobile on component mount
@@ -51,6 +58,15 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
       }
     };
   }, [cameraStream]);
+
+  // Reset local state when dishes are cleared (scan another menu)
+  useEffect(() => {
+    if (detectedDishes.length === 0) {
+      setUploadedImage("");
+      setIsProcessing(false);
+      setIsUploading(false);
+    }
+  }, [detectedDishes.length]);
 
 
   const startCamera = async () => {
@@ -220,11 +236,12 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
       return;
     }
 
-    // Check file type
-    if (!file.type.startsWith("image/")) {
+    // Check file type - only allow formats supported by OpenAI Vision
+    const supportedFormats = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (!supportedFormats.includes(file.type.toLowerCase())) {
       toast({
-        title: "Invalid file type",
-        description: "Please upload an image file",
+        title: "Unsupported image format",
+        description: "Please upload a PNG, JPEG, GIF, or WebP image",
         variant: "destructive",
       });
       return;
@@ -476,7 +493,7 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
                                     <input
                                         type="file"
                                         id="menu-image"
-                                        accept="image/*"
+                                        accept="image/png,image/jpeg,image/gif,image/webp"
                                         onChange={handleFileChange}
                                         className="hidden"
                                     />
@@ -514,20 +531,32 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        <div className="flex items-baseline justify-between mb-4">
-                            <h2 className="text-sm font-semibold text-stone-900 uppercase tracking-wider">
-                                Detected Dishes
-                            </h2>
-                            <span className="text-sm text-stone-400">
-                                {detectedDishes.length} item{detectedDishes.length !== 1 ? 's' : ''}
-                            </span>
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-sm font-semibold text-stone-900 uppercase tracking-wider">
+                                    Detected Dishes
+                                </h2>
+                                <span className="text-sm text-stone-400">
+                                    {detectedDishes.length} item{detectedDishes.length !== 1 ? 's' : ''}
+                                </span>
+                            </div>
+                            {onScanAnotherMenu && (
+                                <button
+                                    onClick={onScanAnotherMenu}
+                                    className="py-2 px-4 text-stone-600 text-sm font-medium border border-stone-300 rounded-lg hover:bg-stone-100 transition-colors duration-200 flex items-center gap-2"
+                                >
+                                    <RefreshCw className="h-4 w-4" />
+                                    Scan Another Menu
+                                </button>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {detectedDishes.map((dish, index) => (
-                                <div
+                                <button
                                     key={index}
-                                    className="bg-white border border-stone-200 rounded-lg p-4 flex gap-4"
+                                    onClick={() => setSelectedDish(dish)}
+                                    className="bg-white border border-stone-200 rounded-lg p-4 flex gap-4 text-left hover:border-stone-400 hover:shadow-md transition-all duration-200 cursor-pointer"
                                 >
                                     {dish.imageUrl ? (
                                         <img
@@ -546,8 +575,9 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-medium text-stone-900 truncate">{dish.name}</h4>
                                         <p className="text-stone-500 text-sm line-clamp-2">{dish.description}</p>
+                                        <p className="text-stone-400 text-xs mt-1">Tap to view details</p>
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -592,6 +622,13 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
                     </div>
                 </div>
             </div>
+
+            {/* Dish Detail Modal */}
+            <DishDetailModal
+                dish={selectedDish}
+                isOpen={!!selectedDish}
+                onClose={() => setSelectedDish(null)}
+            />
         </div>
     );
 }
