@@ -8,6 +8,17 @@ const ENABLE_IMAGE_SEARCH = process.env.ENABLE_IMAGE_SEARCH !== "false";
 
 const GOOGLE_SEARCH_API_URL = "https://www.googleapis.com/customsearch/v1";
 
+// Track if daily quota is exceeded
+let imageQuotaExceeded = false;
+
+export function isImageQuotaExceeded(): boolean {
+    return imageQuotaExceeded;
+}
+
+export function resetImageQuotaFlag(): void {
+    imageQuotaExceeded = false;
+}
+
 /**
  * Normalize a dish name for consistent cache lookups
  * Ensures "Pizza", "pizza", "  PIZZA  " all become "pizza"
@@ -159,6 +170,13 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
         if (!response.ok) {
             const errorText = await response.text();
             log(`Google Search API error (${response.status}): ${errorText}`, "image-search");
+            
+            // Check if quota exceeded (429 error)
+            if (response.status === 429 || errorText.includes('Quota exceeded') || errorText.includes('RESOURCE_EXHAUSTED')) {
+                imageQuotaExceeded = true;
+                log("🚫 Google Image Search daily quota exceeded!", "image-search");
+            }
+            
             return emptyResult;
         }
 

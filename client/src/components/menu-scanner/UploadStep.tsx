@@ -37,6 +37,7 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [uploadedImage, setUploadedImage] = useState<string>("");
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
+  const [imageQuotaExceeded, setImageQuotaExceeded] = useState(false);
   const { toast } = useToast();
 
   // Check if device is mobile on component mount
@@ -65,6 +66,7 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
       setUploadedImage("");
       setIsProcessing(false);
       setIsUploading(false);
+      setImageQuotaExceeded(false);
     }
   }, [detectedDishes.length]);
 
@@ -319,6 +321,12 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
 
       if (data.dishes && data.dishes.length > 0) {
         onDishesDetected(data.dishes, base64Image);
+        
+        // Check if image quota was exceeded
+        if (data.imageQuotaExceeded) {
+          setImageQuotaExceeded(true);
+        }
+        
         toast({
           title: "Dishes detected!",
           description: `Found ${data.dishes.length} dishes in your image`,
@@ -531,6 +539,19 @@ export default function UploadStep({ onDishesDetected, detectedDishes, onGetReco
                     </div>
                 ) : (
                     <div className="space-y-6">
+                        {/* Image quota exceeded warning */}
+                        {imageQuotaExceeded && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                                <span className="text-xl">😔</span>
+                                <div>
+                                    <h3 className="font-medium text-amber-800">Image limit reached</h3>
+                                    <p className="text-sm text-amber-700 mt-1">
+                                        Sorry! Daily limit for image generation exceeded. Some dishes may not have photos. The limit resets tomorrow.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <h2 className="text-sm font-semibold text-stone-900 uppercase tracking-wider">

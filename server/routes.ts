@@ -5,7 +5,7 @@ import { storage } from "./storage.ts";
 import { log } from './simple-logger.ts';
 import multer from "multer";
 import { analyzeMenuImage } from "./openai-vision.ts";
-import { searchDishImage } from "./image-search.ts";
+import { searchDishImage, isImageQuotaExceeded } from "./image-search.ts";
 import { getOpenAIDescription } from "./openai-descriptions.ts";
 import { getOpenAIRecommendations } from "./openai-recommendations.ts";
 
@@ -197,10 +197,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             log(`Successfully processed ${dishesWithDetails.length} dishes with images and descriptions`, 'menu-analyze');
 
+            // Check if image quota was exceeded during processing
+            const imageQuotaExceeded = isImageQuotaExceeded();
+
             // Return the full dish objects
             return res.status(200).json({
                 dishes: dishesWithDetails,
-                message: `Found ${dishesWithDetails.length} dishes in your photo.`
+                message: `Found ${dishesWithDetails.length} dishes in your photo.`,
+                imageQuotaExceeded
             });
 
         } catch (error) {
