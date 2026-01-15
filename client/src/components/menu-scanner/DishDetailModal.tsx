@@ -1,10 +1,11 @@
-import { X, ChefHat, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChefHat, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState, useMemo, useCallback } from "react";
 
 interface DishDetailModalProps {
     dish: {
         name: string;
         description: string;
+        originalDescription?: string; // Description from the menu
         imageUrl: string;
         metadata?: {
             thumbnailUrl?: string | null;
@@ -19,6 +20,8 @@ interface DishDetailModalProps {
 export default function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+    const [detailedDescription, setDetailedDescription] = useState<string | null>(null);
+    const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
     // Get all candidate image URLs
     const allImageUrls = useMemo(() => {
@@ -47,7 +50,41 @@ export default function DishDetailModal({ dish, isOpen, onClose }: DishDetailMod
     useEffect(() => {
         setCurrentIndex(0);
         setFailedUrls(new Set());
+        setDetailedDescription(null);
     }, [dish]);
+
+    // Fetch detailed description when modal opens
+    useEffect(() => {
+        if (!isOpen || !dish) return;
+
+        const fetchDetailedDescription = async () => {
+            setIsLoadingDetail(true);
+            try {
+                const response = await fetch('/api/dish/detail', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: dish.name,
+                        originalDescription: dish.originalDescription,
+                    }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    setDetailedDescription(data.detailedDescription);
+                }
+            } catch (error) {
+                console.error('Failed to fetch detailed description:', error);
+                // Fall back to existing description on error
+            } finally {
+                setIsLoadingDetail(false);
+            }
+        };
+
+        fetchDetailedDescription();
+    }, [isOpen, dish]);
 
     // Adjust currentIndex if it becomes out of bounds
     useEffect(() => {
@@ -193,9 +230,17 @@ export default function DishDetailModal({ dish, isOpen, onClose }: DishDetailMod
                         {dish.name}
                     </h2>
                     
-                    <p className="text-stone-600 text-base sm:text-lg leading-relaxed">
-                        {dish.description}
-                    </p>
+                    {/* Detailed description with loading state */}
+                    {isLoadingDetail ? (
+                        <div className="flex items-center gap-3 text-stone-500">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span className="text-base">Loading details...</span>
+                        </div>
+                    ) : (
+                        <p className="text-stone-600 text-base sm:text-lg leading-relaxed">
+                            {detailedDescription || dish.description}
+                        </p>
+                    )}
 
                     {/* Match reason if available */}
                     {dish.matchReason && (

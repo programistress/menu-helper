@@ -4,9 +4,9 @@ import { insertPreferenceSchema } from "../shared/schema";
 import { storage } from "./storage.ts";
 import { log } from './simple-logger.ts';
 import multer from "multer";
-import { analyzeMenuImage } from "./openai-vision.ts";
+import { analyzeMenuImage, extractKeyIngredients, type ExtractedDish } from "./openai-vision.ts";
 import { searchDishImage, isImageQuotaExceeded } from "./image-search.ts";
-import { getOpenAIDescription } from "./openai-descriptions.ts";
+import { getOpenAIDescription, getDetailedDescription } from "./openai-descriptions.ts";
 import { getOpenAIRecommendations } from "./openai-recommendations.ts";
 
 // In-memory storage for multer
@@ -117,36 +117,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
             }
 
-            // Use the dish names identified by OpenAI Vision
-            const dishNames = visionAnalysis.dishNames;
+            // Use the dishes identified by OpenAI Vision (with optional descriptions)
+            const extractedDishes = visionAnalysis.dishes;
 
             if (process.env.NODE_ENV === 'development') {
-                log(`OpenAI identified ${dishNames.length} dish names`, 'vision-api');
+                const withDesc = extractedDishes.filter(d => d.originalDescription).length;
+                log(`OpenAI identified ${extractedDishes.length} dishes (${withDesc} with menu descriptions)`, 'vision-api');
             }
 
-            if (dishNames.length === 0) {
+            if (extractedDishes.length === 0) {
                 return res.status(200).json({
                     dishes: [],
                     message: "No dish names could be clearly identified in the image. Try taking a clearer photo with better lighting and make sure dish names are visible."
                 });
             }
 
-            // Transform dish names into full dish objects with images
-            log(`Searching for images for ${dishNames.length} dishes`, 'menu-analyze');
+            // Transform extracted dishes into full dish objects with images
+            log(`Searching for images for ${extractedDishes.length} dishes`, 'menu-analyze');
 
             const dishesWithDetails = await Promise.all(
-                dishNames.map(async (dishName) => {
+                extractedDishes.map(async (extractedDish: ExtractedDish) => {
+                    const { name: dishName, originalDescription, useIngredientsForSearch } = extractedDish;
                     const normalizedName = dishName.toLowerCase().trim();
+
+                    // Only extract ingredients if AI determined they're unique enough to help
+                    const ingredients = (originalDescription && useIngredientsForSearch) 
+                        ? extractKeyIngredients(originalDescription)
+                        : undefined;
                     
+                    if (ingredients) {
+                        log(`Using ingredients for "${dishName}": ${ingredients.join(', ')}`, 'menu-analyze');
+                    } else {
+                        log(`Using dish name only for "${dishName}"`, 'menu-analyze');
+                    }
+
                     // Check cache first for both image and description
                     const cachedDish = await storage.findDishInCache(normalizedName);
-                    
+
                     // If we have a complete cache hit (image + description), use it
                     if (cachedDish?.imageUrls?.length && cachedDish?.description) {
                         log(`Full cache hit for "${dishName}"`, 'menu-analyze');
                         return {
                             name: dishName,
                             description: cachedDish.description,
+                            originalDescription, // Keep menu description for detailed view
                             imageUrl: cachedDish.imageUrls[0],
                             metadata: {
                                 thumbnailUrl: cachedDish.imageUrls[1] || null,
@@ -154,28 +168,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
                             }
                         };
                     }
-                    
-                    // Search for image (will also cache the result)
-                    console.log(`📸 [ROUTE] Calling searchDishImage for: "${dishName}"`);
-                    const imageResult = await searchDishImage(dishName);
+
+                    // Search for image with ingredients for better results
+                    console.log(`📸 [ROUTE] Calling searchDishImage for: "${dishName}" with ingredients: ${ingredients?.join(', ') || 'none'}`);
+                    const imageResult = await searchDishImage(dishName, ingredients);
                     console.log(`📸 [ROUTE] Image result for "${dishName}":`, JSON.stringify(imageResult));
-                    
-                    // Get description: use cached, or generate with OpenAI
+
+                    // Get short description for card display:
+                    // - If menu has description, use first part of it or generate brief one
+                    // - If no menu description, generate with OpenAI
                     let description = cachedDish?.description;
                     if (!description) {
-                        log(`[DB CACHE] Miss for "${dishName}" - calling OpenAI`, 'menu-analyze');
-                        description = await getOpenAIDescription(dishName);
-                        
-                        // Cache the generated description to database
+                        if (originalDescription) {
+                            // Menu has description - use it as-is for short display (truncate if needed)
+                            description = originalDescription.length > 80
+                                ? originalDescription.substring(0, 77) + '...'
+                                : originalDescription;
+                            log(`Using menu description for "${dishName}"`, 'menu-analyze');
+                        } else {
+                            // No menu description - generate with OpenAI
+                            log(`[DB CACHE] Miss for "${dishName}" - calling OpenAI`, 'menu-analyze');
+                            description = await getOpenAIDescription(dishName);
+                        }
+
+                        // Cache the description to database
                         try {
                             await storage.cacheDish({
                                 dishName: normalizedName,
                                 description,
-                                imageUrls: imageResult.imageUrl 
+                                imageUrls: imageResult.imageUrl
                                     ? [imageResult.imageUrl, imageResult.thumbnailUrl].filter((url): url is string => url !== null)
                                     : undefined
                             });
-                            log(`Cached OpenAI description for "${dishName}"`, 'menu-analyze');
+                            log(`Cached description for "${dishName}"`, 'menu-analyze');
                         } catch (cacheError) {
                             log(`Failed to cache description: ${cacheError}`, 'menu-analyze');
                         }
@@ -184,6 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     const finalDish = {
                         name: dishName,
                         description,
+                        originalDescription, // Keep for generating detailed description on click
                         imageUrl: imageResult.imageUrl || 'https://placehold.co/400x300?text=No+Image',
                         metadata: {
                             thumbnailUrl: imageResult.thumbnailUrl,
@@ -209,6 +235,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         } catch (error) {
             log(`Error processing image: ${error instanceof Error ? error.message : String(error)}`);
+            
+            // Check for timeout errors
+            if (error instanceof Error && error.message.includes('timed out')) {
+                return res.status(504).json({
+                    message: 'Image processing took too long. This can happen with large or complex menus. Please try with a smaller section of the menu, or try again.',
+                    error: 'Request timeout'
+                });
+            }
+            
             return res.status(500).json({
                 message: 'Error processing image',
                 error: error instanceof Error ? error.message : String(error)
@@ -230,8 +265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { dishes } = req.body;
 
             if (!dishes || !Array.isArray(dishes) || dishes.length === 0) {
-                return res.status(400).json({ 
-                    message: 'No dishes provided. Please scan a menu first.' 
+                return res.status(400).json({
+                    message: 'No dishes provided. Please scan a menu first.'
                 });
             }
 
@@ -241,8 +276,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const userPreferences = await storage.getPreferencesByDeviceId(deviceId);
 
             if (!userPreferences) {
-                return res.status(400).json({ 
-                    message: 'No preferences found. Please set your food preferences first.' 
+                return res.status(400).json({
+                    message: 'No preferences found. Please set your food preferences first.'
                 });
             }
 
@@ -281,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         } catch (error) {
             log(`Error generating recommendations: ${error instanceof Error ? error.message : String(error)}`, 'recommendations');
-            
+
             // Handle specific error types
             if (error instanceof Error) {
                 if (error.message.includes('Rate limit')) {
@@ -300,6 +335,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             return res.status(500).json({
                 message: 'Error generating recommendations',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    });
+
+    // Get detailed description for a specific dish (on-demand when user clicks)
+    app.post('/api/dish/detail', async (req: Request, res: Response) => {
+        try {
+            const { name, originalDescription } = req.body;
+
+            if (!name || typeof name !== 'string') {
+                return res.status(400).json({
+                    message: 'Dish name is required'
+                });
+            }
+
+            log(`Generating detailed description for "${name}"`, 'dish-detail');
+
+            // Generate a rich, detailed description for the modal view
+            const detailedDescription = await getDetailedDescription(name, originalDescription);
+
+            return res.status(200).json({
+                name,
+                detailedDescription,
+                success: true
+            });
+
+        } catch (error) {
+            log(`Error generating dish detail: ${error instanceof Error ? error.message : String(error)}`, 'dish-detail');
+
+            return res.status(500).json({
+                message: 'Error generating dish details',
                 error: error instanceof Error ? error.message : String(error)
             });
         }

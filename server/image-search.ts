@@ -32,10 +32,22 @@ function normalizeDishName(dishName: string): string {
 
 /**
  * Build an optimized search query for food images
+ * Uses dish name + key ingredients ONLY when ingredients are unique/noteworthy
+ * 
+ * @param dishName - Name of the dish
+ * @param ingredients - Optional array of key ingredients (only for non-standard dishes)
  */
-function buildSearchQuery(dishName: string): string {
-    // Add "restaurant" and "plated" for better food photography results
-    return `${dishName.trim()} dish`;
+function buildSearchQuery(dishName: string, ingredients?: string[]): string {
+    const name = dishName.trim();
+
+    // If we have noteworthy ingredients, use them for more specific results
+    if (ingredients && ingredients.length > 0) {
+        const ingredientStr = ingredients.slice(0, 3).join(' ');
+        return `${name} ${ingredientStr} plated`;
+    }
+
+    // Standard dishes - just the name gets better results
+    return `${name} plated dish`;
 }
 
 // metadata about the image
@@ -79,15 +91,16 @@ export interface DishImageResult {
 /**
  * Search for a dish image using Google Custom Search API
  * @param dishName - Name of the dish to search for
+ * @param ingredients - Optional array of key ingredients to improve search accuracy
  * @returns DishImageResult with image URLs or null values if not found
 */
-export async function searchDishImage(dishName: string): Promise<DishImageResult> {
+export async function searchDishImage(dishName: string, ingredients?: string[]): Promise<DishImageResult> {
     console.log(`\n🖼️ [IMAGE-SEARCH] ========== START ==========`);
     console.log(`🖼️ [IMAGE-SEARCH] Searching for: "${dishName}"`);
     console.log(`🖼️ [IMAGE-SEARCH] ENABLE_IMAGE_SEARCH: ${ENABLE_IMAGE_SEARCH}`);
     console.log(`🖼️ [IMAGE-SEARCH] GOOGLE_API_KEY configured: ${!!GOOGLE_API_KEY}`);
     console.log(`🖼️ [IMAGE-SEARCH] GOOGLE_CX configured: ${!!GOOGLE_CX}`);
-    
+
     // Default empty result
     const emptyResult: DishImageResult = {
         imageUrl: null,
@@ -139,8 +152,9 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             return emptyResult;
         }
 
-        // Build the search query
-        const query = buildSearchQuery(dishName);
+        // Build the search query (using ingredients if available for better results)
+        const query = buildSearchQuery(dishName, ingredients);
+        log(`Search query: "${query}"`, "image-search");
 
         // Construct the API URL with parameters
         const params = new URLSearchParams({
@@ -170,13 +184,13 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
         if (!response.ok) {
             const errorText = await response.text();
             log(`Google Search API error (${response.status}): ${errorText}`, "image-search");
-            
+
             // Check if quota exceeded (429 error)
             if (response.status === 429 || errorText.includes('Quota exceeded') || errorText.includes('RESOURCE_EXHAUSTED')) {
                 imageQuotaExceeded = true;
                 log("🚫 Google Image Search daily quota exceeded!", "image-search");
             }
-            
+
             return emptyResult;
         }
 
@@ -196,7 +210,7 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
         }
 
         const blockedDomains = [
-            'fbsbx.com',      
+            'fbsbx.com',
             'facebook.com',
             'fbcdn.net',
             'instagram.com',
@@ -205,11 +219,11 @@ export async function searchDishImage(dishName: string): Promise<DishImageResult
             'pinimg.com',
             'twitter.com',
             'twimg.com',
-            'yelp.com',        
+            'yelp.com',
             'yelpcdn.com',
             'tripadvisor.com',
             'tacdn.com',
-            'youtube.com',        
+            'youtube.com',
             'ytimg.com',
             'youtu.be',
         ];

@@ -11,8 +11,8 @@ function getOpenAIClient(): OpenAI {
     if (!openai) {
         openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
-            maxRetries: 2,
-            timeout: 15000
+            maxRetries: 3, // Increased from 2
+            timeout: 60000 // Increased from 15s to 60s for vision API
         });
     }
     return openai;
@@ -31,12 +31,48 @@ function isOpenAIConfigured(): boolean {
     return !!apiKey && apiKey.length > 5 && apiKey !== "your-api-key-here"; // Basic validation
 }
 
+// Dish extracted from menu with optional description
+export interface ExtractedDish {
+    name: string;
+    originalDescription?: string; // Description from the menu itself (if available)
+    useIngredientsForSearch?: boolean; // Whether ingredients are unique enough to improve image search
+}
+
 /**
- * Main function to analyze a restaurant menu image and extract dish names
+ * Extract the top 3 key ingredients from a description string
+ * Used for building better image search queries
+ */
+export function extractKeyIngredients(description: string): string[] {
+    if (!description || description.trim().length === 0) return [];
+
+    // Common words to filter out (not ingredients)
+    const stopWords = new Set([
+        'with', 'and', 'the', 'our', 'fresh', 'house', 'made', 'served', 'topped',
+        'drizzled', 'garnished', 'seasoned', 'homemade', 'signature', 'special',
+        'delicious', 'crispy', 'tender', 'juicy', 'creamy', 'rich', 'light',
+        'grilled', 'roasted', 'fried', 'baked', 'steamed', 'sauteed', 'braised',
+        'on', 'in', 'of', 'a', 'an', 'to', 'for', 'from', 'by'
+    ]);
+
+    // Extract words, filter, and return top 3
+    const words = description
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 2 && !stopWords.has(word));
+
+    // Return unique ingredients (first 3)
+    const unique = [...new Set(words)];
+    return unique.slice(0, 3);
+}
+
+/**
+ * Main function to analyze a restaurant menu image and extract dish names with descriptions
  * Implements rate limiting and cost controls with fallback to Google Vision
  */
 export async function analyzeMenuImage(base64Image: string): Promise<{
-    dishNames: string[],
+    dishes: ExtractedDish[],
+    dishNames: string[], // Keep for backward compatibility
     isMenu: boolean
 }> {
     try {
@@ -65,14 +101,14 @@ export async function analyzeMenuImage(base64Image: string): Promise<{
             messages: [
                 {
                     role: "system",
-                    content: "You are a precise menu reader and translator. Extract dish names from menu photos and ALWAYS translate them to English. Combine food-type categories with items (Toast, Salad, Bowl, etc). IGNORE generic categories (Main Dish, Appetizers, Sides, Starters, Mains, etc)."
+                    content: "You are a precise menu reader and translator. Extract dish names AND their descriptions from menu photos. ALWAYS translate to English. Combine food-type categories with items (Toast, Salad, Bowl, etc). IGNORE generic categories (Main Dish, Appetizers, Sides, Starters, Mains, etc)."
                 },
                 {
                     role: "user",
                     content: [
                         {
                             type: "text",
-                            text: `Extract dish names from this menu.
+                            text: `Extract dish names AND descriptions from this menu.
 
 IMPORTANT: If the menu is in a foreign language (Chinese, Japanese, Korean, Spanish, French, etc.), TRANSLATE all dish names to English. Use the common English name for the dish.
 
@@ -82,6 +118,21 @@ Examples of translation:
 - "炒饭" → "Fried Rice"
 - "担担面" → "Dan Dan Noodles"
 - "Pad Thai" → "Pad Thai" (already English/common name)
+
+For EACH dish, extract:
+1. The dish NAME (translated to English)
+2. The DESCRIPTION if visible on the menu (ingredients, preparation details). If no description is visible, omit it.
+3. Whether to USE INGREDIENTS for image search (useIngredientsForSearch: true/false)
+
+WHEN TO USE INGREDIENTS IN IMAGE SEARCH (set useIngredientsForSearch: true):
+- Dish has UNIQUE or NON-STANDARD ingredients (e.g., "Burger with duck, mango chutney, brioche")
+- Dish has SPECIFIC preparation methods (e.g., "Pan-seared salmon, miso glaze, yuzu")
+- Dish has FUSION or UNUSUAL combinations (e.g., "Tacos with Korean BBQ, kimchi, sesame")
+
+WHEN TO SKIP INGREDIENTS (set useIngredientsForSearch: false):
+- Dish has STANDARD, TYPICAL ingredients for that dish type (e.g., "Kung Pao Chicken - chicken, peanuts, chili" → standard)
+- Dish name is self-explanatory (e.g., "Caesar Salad", "Margherita Pizza")
+- Simple dishes (e.g., "French Fries", "Iced Tea")
 
 APPEND these food-type categories to items:
 Toast, Salad, Bowl, Sandwich, Burger, Wrap, Pizza, Pasta, Soup, Taco, Curry, Steak, Smoothie, Coffee, Juice
@@ -93,11 +144,16 @@ Main Dish, Mains, Appetizers, Starters, Sides, Entrees, Specials, Chef's Picks, 
 
 Respond with JSON:
 {
-  "dishNames": ["English Dish Name 1", "English Dish Name 2"],
+  "dishes": [
+    {"name": "Kung Pao Chicken", "originalDescription": "chicken, peanuts, dried chili", "useIngredientsForSearch": false},
+    {"name": "Duck Burger", "originalDescription": "crispy duck, mango chutney, arugula, brioche bun", "useIngredientsForSearch": true},
+    {"name": "Caesar Salad", "useIngredientsForSearch": false}
+  ],
   "isMenu": true/false
 }
 
-Only include dishes you can clearly read. All names MUST be in English for image search.`
+ONLY include originalDescription if the menu shows one. The useIngredientsForSearch field helps us get better image results.
+All names MUST be in English.`
                         },
                         {
                             type: "image_url",
@@ -109,7 +165,7 @@ Only include dishes you can clearly read. All names MUST be in English for image
                 }
             ],
             response_format: { type: "json_object" },
-            max_tokens: 800
+            max_tokens: 1500
         });
 
         // Parse the response
@@ -124,17 +180,25 @@ Only include dishes you can clearly read. All names MUST be in English for image
             return await fallbackToGoogleVision(base64Image);
         }
 
-        log(`OpenAI identified ${result.dishNames?.length || 0} dishes`, "vision");
+        // Handle both new format (dishes array) and legacy format (dishNames array)
+        const dishes: ExtractedDish[] = result.dishes ||
+            (result.dishNames || []).map((name: string) => ({ name }));
+
+        // Extract dish names for backward compatibility
+        const dishNames = dishes.map(d => d.name);
+
+        log(`OpenAI identified ${dishes.length} dishes (${dishes.filter(d => d.originalDescription).length} with descriptions)`, "vision");
 
         return {
-            dishNames: result.dishNames || [],
+            dishes,
+            dishNames,
             isMenu: result.isMenu || false
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        
+
         // Check for unsupported image format - this should be shown to user
-        if (errorMessage.includes('unsupported image') || 
+        if (errorMessage.includes('unsupported image') ||
             errorMessage.includes('image format') ||
             errorMessage.includes("['png', 'jpeg', 'gif', 'webp']")) {
             log(`OpenAI Vision API unsupported image format: ${errorMessage}`, "vision");
@@ -164,6 +228,7 @@ Only include dishes you can clearly read. All names MUST be in English for image
  * This provides a more cost-effective option when OpenAI is unavailable
  */
 async function fallbackToGoogleVision(base64Image: string): Promise<{
+    dishes: ExtractedDish[],
     dishNames: string[],
     isMenu: boolean
 }> {
@@ -173,7 +238,7 @@ async function fallbackToGoogleVision(base64Image: string): Promise<{
         // Check rate limits and atomically increment if allowed
         if (!(await rateLimiter.checkAndIncrement('google-vision'))) {
             log("Rate limit reached for Google Vision fallback API", "vision");
-            return { dishNames: [], isMenu: false };
+            return { dishes: [], dishNames: [], isMenu: false };
         }
 
         const visionResult = await analyzeImage(base64Image);
@@ -194,7 +259,11 @@ async function fallbackToGoogleVision(base64Image: string): Promise<{
 
         log(`Google Vision extracted ${potentialTitles.length} potential dish names`, "vision");
 
+        // Convert to ExtractedDish format (no descriptions from Google Vision)
+        const dishes: ExtractedDish[] = potentialTitles.map(name => ({ name }));
+
         return {
+            dishes,
             dishNames: potentialTitles,
             isMenu: visionResult.isMenu || false
         };
@@ -203,6 +272,7 @@ async function fallbackToGoogleVision(base64Image: string): Promise<{
 
         // Return empty results if all methods fail
         return {
+            dishes: [],
             dishNames: [],
             isMenu: false
         };
