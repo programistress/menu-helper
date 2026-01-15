@@ -16,9 +16,9 @@ console.log('');
 
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
-import { setupVite, serveStatic, log } from "./vite.ts";
-import { registerRoutes } from './routes.ts';
-import { ensureDeviceId } from "./middleware/deviceId.ts";
+import { setupVite, serveStatic, log } from "./vite.js";
+import { registerRoutes } from './routes.js';
+import { ensureDeviceId } from "./middleware/deviceId.js";
 
 const app = express();
 

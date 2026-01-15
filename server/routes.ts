@@ -1,13 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { insertPreferenceSchema } from "../shared/schema";
-import { storage } from "./storage.ts";
-import { log } from './simple-logger.ts';
+import { storage } from "./storage.js";
+import { log } from './simple-logger.js';
 import multer from "multer";
-import { analyzeMenuImage, extractKeyIngredients, type ExtractedDish } from "./openai-vision.ts";
-import { searchDishImage, isImageQuotaExceeded } from "./image-search.ts";
-import { getOpenAIDescription, getDetailedDescription } from "./openai-descriptions.ts";
-import { getOpenAIRecommendations } from "./openai-recommendations.ts";
+import { analyzeMenuImage, extractKeyIngredients, type ExtractedDish } from "./openai-vision.js";
+import { searchDishImage, isImageQuotaExceeded } from "./image-search.js";
+import { getOpenAIDescription, getDetailedDescription } from "./openai-descriptions.js";
+import { getOpenAIRecommendations } from "./openai-recommendations.js";
 
 // In-memory storage for multer
 const upload = multer({

@@ -1,5 +1,5 @@
 import { log } from './simple-logger.js';
-import { logError, logWarning, logRateLimit } from './simple-error-logger.ts';
+import { logError, logWarning, logRateLimit } from './simple-error-logger.js';
 
 // Define interfaces for better type safety
 // kv - key value store
