@@ -32,22 +32,24 @@ function normalizeDishName(dishName: string): string {
 
 /**
  * Build an optimized search query for food images
- * Uses dish name + key ingredients ONLY when ingredients are unique/noteworthy
+ * Prioritizes dish name heavily, only adds ingredients as secondary context
  * 
  * @param dishName - Name of the dish
- * @param ingredients - Optional array of key ingredients (only for non-standard dishes)
+ * @param ingredients - Optional array of key ingredients (used sparingly)
  */
 function buildSearchQuery(dishName: string, ingredients?: string[]): string {
     const name = dishName.trim();
 
-    // If we have noteworthy ingredients, use them for more specific results
+    // STRICTER: Only use ingredients if we have them AND they're truly unique
+    // Add them AFTER the dish name with quotes for exact matching
     if (ingredients && ingredients.length > 0) {
-        const ingredientStr = ingredients.slice(0, 3).join(' ');
-        return `${name} ${ingredientStr} plated`;
+        // Take max 2 ingredients to keep query focused
+        const ingredientStr = ingredients.slice(0, 2).join(' ');
+        return `"${name}" dish ${ingredientStr} food`;
     }
 
-    // Standard dishes - just the name gets better results
-    return `${name} plated dish`;
+    // Standard dishes - prioritize exact dish name match
+    return `"${name}" dish food plated`;
 }
 
 // metadata about the image

@@ -65,8 +65,9 @@ export default function Menu() {
             }
             const data = await response.json();
             console.log('Preferences fetched:', data);
-            // API returns preferences directly, wrap it for consistency
-            return { preferences: data };
+            // API returns { preferences: {...}, deviceId: "..." }
+            // Extract just the preferences object
+            return { preferences: data.preferences };
         },
         staleTime: 30000,
         enabled: !deviceLoading && !!deviceId, // Only run query when device ID is available
