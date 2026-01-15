@@ -4,7 +4,7 @@ import { insertPreferenceSchema } from "../shared/schema";
 import { storage } from "./storage.js";
 import { log } from './simple-logger.js';
 import multer from "multer";
-import { analyzeMenuImage, extractKeyIngredients, type ExtractedDish } from "./openai-vision.js";
+import { analyzeMenuImage, type ExtractedDish } from "./openai-vision.js";
 import { searchDishImage, isImageQuotaExceeded } from "./image-search.js";
 import { getOpenAIDescription, getDetailedDescription } from "./openai-descriptions.js";
 import { getOpenAIRecommendations } from "./openai-recommendations.js";
@@ -137,19 +137,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             const dishesWithDetails = await Promise.all(
                 extractedDishes.map(async (extractedDish: ExtractedDish) => {
-                    const { name: dishName, originalDescription, useIngredientsForSearch } = extractedDish;
+                    const { name: dishName, originalDescription } = extractedDish;
                     const normalizedName = dishName.toLowerCase().trim();
 
-                    // Only extract ingredients if AI determined they're unique enough to help
-                    const ingredients = (originalDescription && useIngredientsForSearch) 
-                        ? extractKeyIngredients(originalDescription)
-                        : undefined;
-                    
-                    if (ingredients) {
-                        log(`Using ingredients for "${dishName}": ${ingredients.join(', ')}`, 'menu-analyze');
-                    } else {
-                        log(`Using dish name only for "${dishName}"`, 'menu-analyze');
-                    }
+                    log(`Searching for "${dishName}" using dish name only`, 'menu-analyze');
 
                     // Check cache first for both image and description
                     const cachedDish = await storage.findDishInCache(normalizedName);
@@ -169,9 +160,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         };
                     }
 
-                    // Search for image with ingredients for better results
-                    console.log(`📸 [ROUTE] Calling searchDishImage for: "${dishName}" with ingredients: ${ingredients?.join(', ') || 'none'}`);
-                    const imageResult = await searchDishImage(dishName, ingredients);
+                    // Search for image by dish name only
+                    console.log(`📸 [ROUTE] Calling searchDishImage for: "${dishName}"`);
+                    const imageResult = await searchDishImage(dishName);
                     console.log(`📸 [ROUTE] Image result for "${dishName}":`, JSON.stringify(imageResult));
 
                     // Get short description for card display:

@@ -31,25 +31,15 @@ function normalizeDishName(dishName: string): string {
 }
 
 /**
- * Build an optimized search query for food images
- * Prioritizes dish name heavily, only adds ingredients as secondary context
+ * Build search query for food images - DISH NAME ONLY
  * 
  * @param dishName - Name of the dish
- * @param ingredients - Optional array of key ingredients (used sparingly)
+ * @param ingredients - IGNORED - we only search by dish name
  */
-function buildSearchQuery(dishName: string, ingredients?: string[]): string {
+function buildSearchQuery(dishName: string, _ingredients?: string[]): string {
     const name = dishName.trim();
-
-    // STRICTER: Only use ingredients if we have them AND they're truly unique
-    // Add them AFTER the dish name with quotes for exact matching
-    if (ingredients && ingredients.length > 0) {
-        // Take max 2 ingredients to keep query focused
-        const ingredientStr = ingredients.slice(0, 2).join(' ');
-        return `"${name}" dish ${ingredientStr} food`;
-    }
-
-    // Standard dishes - prioritize exact dish name match
-    return `"${name}" dish food plated`;
+    // Simple query: just dish name + "food" for best results
+    return `${name} food`;
 }
 
 // metadata about the image
@@ -164,7 +154,7 @@ export async function searchDishImage(dishName: string, ingredients?: string[]):
             cx: GOOGLE_CX!,
             q: query,
             searchType: 'image',
-            num: '3',           // Get top 3 results to have fallbacks
+            num: '10',          // Get 10 results for more options
             imgSize: 'large',   // Prefer larger images
             imgType: 'photo',   // Prefer photos over clipart
             safe: 'active'      // Safe search enabled
@@ -230,11 +220,11 @@ export async function searchDishImage(dishName: string, ingredients?: string[]):
             'youtu.be',
         ];
 
-        // Find all usable results (not from blocked domains) - up to 3 images
+        // Find all usable results (not from blocked domains) - up to 10 images
         const usableResults = data.items.filter(item => {
             const url = item.link.toLowerCase();
             return !blockedDomains.some(domain => url.includes(domain));
-        }).slice(0, 3);  // Take up to 3 usable images
+        }).slice(0, 10);  // Take up to 10 usable images
 
         if (usableResults.length === 0) {
             log(`All image results from blocked domains for: ${dishName}`, "image-search");
