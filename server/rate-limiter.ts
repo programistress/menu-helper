@@ -173,8 +173,8 @@ export class VercelKVRateLimiter {
      */
     private checkForAlerts(
         apiName: string,
-        currentCount: number,
-        limit: number,
+        _currentCount: number,
+        _limit: number,
         dailyUsage: number,
         dailyLimit: number
     ): void {

@@ -1,10 +1,9 @@
 import {
-  users, type User, type InsertUser,
   preferences, type Preference, type InsertPreference,
-  dishCache, type DishCache, type InsertDishCache
+  dishCache, type DishCache
 } from "../shared/schema.js";
 import { db } from "./db.js";
-import { eq, and, desc, or, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { log } from "./simple-logger.js";
 
 // Custom type for cacheDish input (avoids Zod type inference issues)
