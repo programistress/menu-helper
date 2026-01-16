@@ -25,43 +25,22 @@ let kv: KVStore | null = null;
 async function getKV(): Promise<KVStore> {
     // if we already have a kv store, return it
     if (kv === null) {
-
-        try {
-            // if we are in the Vercel environment or have a KV_URL environment variable, use the Vercel KV store
-            if (process.env.VERCEL || process.env.KV_URL) {
-                // load the package only hwen needed
-                const { kv: vercelKV } = await import('@vercel/kv');
-                kv = vercelKV;
-                log('Using Vercel KV for rate limiting', 'rate-limiter');
-            } else {
-                // Local development fallback - use in-memory store
-                // fake redis using map
-                const localStore = new Map<string, number>();
-                kv = {
-                    get: (key: string) => Promise.resolve(localStore.get(key) || null),
-                    set: (key: string, value: number) => { localStore.set(key, value); return Promise.resolve('OK' as const); },
-                    incr: (key: string) => {
-                        const current = localStore.get(key) || 0;
-                        const newValue = current + 1;
-                        localStore.set(key, newValue);
-                        return Promise.resolve(newValue);
-                    },
-                    expire: (_key: string, _seconds: number) => Promise.resolve(1), // No-op for local
-                };
-                log('Using local fallback for rate limiting (development)', 'rate-limiter');
-            }
-        } catch (error) {
-            log(`KV not available, using local fallback: ${error}`, 'rate-limiter');
-            // Fallback to basic object - ensure we never return null
-            kv = {
-                get: (_key: string) => Promise.resolve(null),
-                set: (_key: string, _value: number) => Promise.resolve('OK' as const),
-                incr: (_key: string) => Promise.resolve(1),
-                expire: (_key: string, _seconds: number) => Promise.resolve(1),
-            };
-        }
+        // Local development - use in-memory store
+        const localStore = new Map<string, number>();
+        kv = {
+            get: (key: string) => Promise.resolve(localStore.get(key) || null),
+            set: (key: string, value: number) => { localStore.set(key, value); return Promise.resolve('OK' as const); },
+            incr: (key: string) => {
+                const current = localStore.get(key) || 0;
+                const newValue = current + 1;
+                localStore.set(key, newValue);
+                return Promise.resolve(newValue);
+            },
+            expire: (_key: string, _seconds: number) => Promise.resolve(1), // No-op for local
+        };
+        log('Using local in-memory store for rate limiting', 'rate-limiter');
     }
-    return kv!; // We ensure kv is never null above
+    return kv!;
 }
 
 /**
@@ -71,7 +50,7 @@ export class VercelKVRateLimiter {
     private readonly limits = {
         'openai': { perMinute: 100, perDay: 2000 },
         'google-vision': { perMinute: 100, perDay: 5000 },
-        'google-search': { perMinute: 60, perDay: 500 },
+        'google-search': { perMinute: 100, perDay: 1000 },
     };
 
     /**
