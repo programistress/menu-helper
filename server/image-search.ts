@@ -1,6 +1,7 @@
 import { log } from './simple-logger.js';
 import { rateLimiter } from './rate-limiter.js';
 import { storage } from './storage.js';
+import OpenAI from "openai";
 
 const GOOGLE_API_KEY = process.env.GOOGLE_SEARCH_API_KEY;
 const GOOGLE_CX = process.env.GOOGLE_SEARCH_CX;
@@ -10,6 +11,23 @@ const GOOGLE_SEARCH_API_URL = "https://www.googleapis.com/customsearch/v1";
 
 // Track if daily quota is exceeded
 let imageQuotaExceeded = false;
+
+// OpenAI client for dish name simplification
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            maxRetries: 2,
+            timeout: 10000 // Short timeout for search queries
+        });
+    }
+    return openai;
+}
+
+// Cache for simplified dish names to avoid repeated API calls
+const simplifiedNameCache = new Map<string, string>();
 
 export function isImageQuotaExceeded(): boolean {
     return imageQuotaExceeded;
@@ -31,15 +49,110 @@ function normalizeDishName(dishName: string): string {
 }
 
 /**
- * Build search query for food images - DISH NAME ONLY
+ * Common restaurant/brand name patterns to strip from dish names
+ */
+const RESTAURANT_PATTERNS = [
+    /^[\w\s]+'s\s+/i,           // "Landwer's ", "Joe's ", etc.
+    /^cafe\s+[\w]+\s+/i,        // "Cafe Renée "
+    /^restaurant\s+[\w]+\s+/i,  // "Restaurant XYZ "
+    /^chef\s+[\w]+'s?\s+/i,     // "Chef Mario's "
+    /^the\s+[\w]+\s+(?:special|signature)\s*/i, // "The House Special"
+];
+
+/**
+ * Use OpenAI to simplify a fancy/foreign dish name into searchable terms
+ * 
+ * Examples:
+ * - "Cafe Renée Petit Dejeuner" → "french breakfast eggs croissant"
+ * - "Burger à l'American" → "american style burger"
+ * - "Landwer's Granola Yogurt" → "granola yogurt bowl"
+ */
+async function simplifyDishName(dishName: string): Promise<string> {
+    const cacheKey = dishName.toLowerCase().trim();
+    
+    // Check cache first
+    if (simplifiedNameCache.has(cacheKey)) {
+        const cached = simplifiedNameCache.get(cacheKey)!;
+        log(`[CACHE] Simplified name cache hit: "${dishName}" → "${cached}"`, 'image-search');
+        return cached;
+    }
+    
+    // First, try basic cleanup - strip known restaurant patterns
+    let cleanedName = dishName;
+    for (const pattern of RESTAURANT_PATTERNS) {
+        cleanedName = cleanedName.replace(pattern, '');
+    }
+    cleanedName = cleanedName.trim();
+    
+    // If the name looks simple enough (no special chars, short, English), use it directly
+    const looksSimple = /^[a-zA-Z\s]{3,30}$/.test(cleanedName) && 
+                        cleanedName.split(' ').length <= 4;
+    
+    if (looksSimple) {
+        log(`[SIMPLE] Dish name looks simple, using: "${cleanedName}"`, 'image-search');
+        simplifiedNameCache.set(cacheKey, cleanedName);
+        return cleanedName;
+    }
+    
+    // Use OpenAI for complex/foreign names
+    if (!process.env.OPENAI_API_KEY) {
+        log(`[NO API KEY] Using cleaned name: "${cleanedName}"`, 'image-search');
+        simplifiedNameCache.set(cacheKey, cleanedName);
+        return cleanedName;
+    }
+    
+    try {
+        // Don't rate-limit this heavily - it's a simple, cheap call
+        const response = await getOpenAIClient().chat.completions.create({
+            model: "gpt-4o-mini", // Cheap and fast model
+            messages: [
+                {
+                    role: "system",
+                    content: `Convert menu dish names to simple English search terms for finding food images. 
+Remove restaurant names, translate foreign words, keep only the actual food.
+Reply with ONLY the simplified search terms, 2-5 words max.
+
+Examples:
+- "Cafe Renée Petit Dejeuner" → "french breakfast plate"
+- "Burger à l'American" → "american cheeseburger"
+- "Landwer's Granola Yogurt" → "granola yogurt bowl"
+- "Hearty Italian Toast" → "italian bruschetta toast"
+- "Shakshuka Mediterranean Style" → "shakshuka eggs tomato"
+- "Eggs Benedict Royale" → "eggs benedict salmon"`
+                },
+                {
+                    role: "user",
+                    content: dishName
+                }
+            ],
+            max_tokens: 30,
+            temperature: 0.3
+        });
+        
+        const simplified = response.choices[0].message.content?.trim() || cleanedName;
+        log(`[OPENAI] Simplified: "${dishName}" → "${simplified}"`, 'image-search');
+        
+        // Cache the result
+        simplifiedNameCache.set(cacheKey, simplified);
+        return simplified;
+        
+    } catch (error) {
+        log(`[ERROR] Failed to simplify dish name: ${error}`, 'image-search');
+        simplifiedNameCache.set(cacheKey, cleanedName);
+        return cleanedName;
+    }
+}
+
+/**
+ * Build search query for food images with AI-powered name simplification
  * 
  * @param dishName - Name of the dish
- * @param ingredients - IGNORED - we only search by dish name
+ * @param simplifiedName - Optional pre-simplified name (to avoid async in some contexts)
  */
-function buildSearchQuery(dishName: string, _ingredients?: string[]): string {
-    const name = dishName.trim();
-    // Simple query: just dish name + "food" for best results
-    return `${name} food`;
+function buildSearchQuery(simplifiedName: string): string {
+    // Add "food dish" and negative keywords to exclude non-food results
+    // Negative keywords help filter out buildings, packaging, logos, etc.
+    return `${simplifiedName} food dish -restaurant -building -storefront -packaging -logo -menu`;
 }
 
 // metadata about the image
@@ -83,10 +196,10 @@ export interface DishImageResult {
 /**
  * Search for a dish image using Google Custom Search API
  * @param dishName - Name of the dish to search for
- * @param ingredients - Optional array of key ingredients to improve search accuracy
+ * @param _ingredients - Optional array of key ingredients (currently unused - we use AI simplification instead)
  * @returns DishImageResult with image URLs or null values if not found
 */
-export async function searchDishImage(dishName: string, ingredients?: string[]): Promise<DishImageResult> {
+export async function searchDishImage(dishName: string, _ingredients?: string[]): Promise<DishImageResult> {
     console.log(`\n🖼️ [IMAGE-SEARCH] ========== START ==========`);
     console.log(`🖼️ [IMAGE-SEARCH] Searching for: "${dishName}"`);
     console.log(`🖼️ [IMAGE-SEARCH] ENABLE_IMAGE_SEARCH: ${ENABLE_IMAGE_SEARCH}`);
@@ -144,9 +257,13 @@ export async function searchDishImage(dishName: string, ingredients?: string[]):
             return emptyResult;
         }
 
-        // Build the search query (using ingredients if available for better results)
-        const query = buildSearchQuery(dishName, ingredients);
-        log(`Search query: "${query}"`, "image-search");
+        // Simplify the dish name for better search results
+        // This handles restaurant names, foreign terms, branded items, etc.
+        const simplifiedName = await simplifyDishName(dishName);
+        
+        // Build the search query with the simplified name
+        const query = buildSearchQuery(simplifiedName);
+        log(`Search query: "${query}" (original: "${dishName}")`, "image-search");
 
         // Construct the API URL with parameters
         const params = new URLSearchParams({

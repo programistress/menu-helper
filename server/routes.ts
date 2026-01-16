@@ -182,16 +182,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                             description = await getOpenAIDescription(dishName);
                         }
 
-                        // Cache the description to database
+                        // Cache the description and ALL image URLs to database
                         try {
                             await storage.cacheDish({
                                 dishName: normalizedName,
                                 description,
-                                imageUrls: imageResult.imageUrl
-                                    ? [imageResult.imageUrl, imageResult.thumbnailUrl].filter((url): url is string => url !== null)
-                                    : undefined
+                                // Store all image URLs for carousel, not just the first two
+                                imageUrls: imageResult.allImageUrls?.length 
+                                    ? imageResult.allImageUrls 
+                                    : (imageResult.imageUrl ? [imageResult.imageUrl] : undefined)
                             });
-                            log(`Cached description for "${dishName}"`, 'menu-analyze');
+                            log(`Cached description and ${imageResult.allImageUrls?.length || 0} images for "${dishName}"`, 'menu-analyze');
                         } catch (cacheError) {
                             log(`Failed to cache description: ${cacheError}`, 'menu-analyze');
                         }
