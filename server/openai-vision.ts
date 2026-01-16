@@ -35,35 +35,6 @@ function isOpenAIConfigured(): boolean {
 export interface ExtractedDish {
     name: string;
     originalDescription?: string; // Description from the menu itself (if available)
-    useIngredientsForSearch?: boolean; // Whether ingredients are unique enough to improve image search
-}
-
-/**
- * Extract the top 3 key ingredients from a description string
- * Used for building better image search queries
- */
-export function extractKeyIngredients(description: string): string[] {
-    if (!description || description.trim().length === 0) return [];
-
-    // Common words to filter out (not ingredients)
-    const stopWords = new Set([
-        'with', 'and', 'the', 'our', 'fresh', 'house', 'made', 'served', 'topped',
-        'drizzled', 'garnished', 'seasoned', 'homemade', 'signature', 'special',
-        'delicious', 'crispy', 'tender', 'juicy', 'creamy', 'rich', 'light',
-        'grilled', 'roasted', 'fried', 'baked', 'steamed', 'sauteed', 'braised',
-        'on', 'in', 'of', 'a', 'an', 'to', 'for', 'from', 'by'
-    ]);
-
-    // Extract words, filter, and return top 3
-    const words = description
-        .toLowerCase()
-        .replace(/[^a-z\s]/g, ' ')
-        .split(/\s+/)
-        .filter(word => word.length > 2 && !stopWords.has(word));
-
-    // Return unique ingredients (first 3)
-    const unique = [...new Set(words)];
-    return unique.slice(0, 3);
 }
 
 /**
@@ -122,17 +93,6 @@ Examples of translation:
 For EACH dish, extract:
 1. The dish NAME (translated to English)
 2. The DESCRIPTION if visible on the menu (ingredients, preparation details). If no description is visible, omit it.
-3. Whether to USE INGREDIENTS for image search (useIngredientsForSearch: true/false)
-
-WHEN TO USE INGREDIENTS IN IMAGE SEARCH (set useIngredientsForSearch: true):
-- Dish has UNIQUE or NON-STANDARD ingredients (e.g., "Burger with duck, mango chutney, brioche")
-- Dish has SPECIFIC preparation methods (e.g., "Pan-seared salmon, miso glaze, yuzu")
-- Dish has FUSION or UNUSUAL combinations (e.g., "Tacos with Korean BBQ, kimchi, sesame")
-
-WHEN TO SKIP INGREDIENTS (set useIngredientsForSearch: false):
-- Dish has STANDARD, TYPICAL ingredients for that dish type (e.g., "Kung Pao Chicken - chicken, peanuts, chili" → standard)
-- Dish name is self-explanatory (e.g., "Caesar Salad", "Margherita Pizza")
-- Simple dishes (e.g., "French Fries", "Iced Tea")
 
 APPEND these food-type categories to items:
 Toast, Salad, Bowl, Sandwich, Burger, Wrap, Pizza, Pasta, Soup, Taco, Curry, Steak, Smoothie, Coffee, Juice
@@ -145,14 +105,14 @@ Main Dish, Mains, Appetizers, Starters, Sides, Entrees, Specials, Chef's Picks, 
 Respond with JSON:
 {
   "dishes": [
-    {"name": "Kung Pao Chicken", "originalDescription": "chicken, peanuts, dried chili", "useIngredientsForSearch": false},
-    {"name": "Duck Burger", "originalDescription": "crispy duck, mango chutney, arugula, brioche bun", "useIngredientsForSearch": true},
-    {"name": "Caesar Salad", "useIngredientsForSearch": false}
+    {"name": "Kung Pao Chicken", "originalDescription": "chicken, peanuts, dried chili"},
+    {"name": "Duck Burger", "originalDescription": "crispy duck, mango chutney, arugula, brioche bun"},
+    {"name": "Caesar Salad", "originalDescription": "lettuce, romaine, tomatoes, croutons, parmesan cheese"}
   ],
   "isMenu": true/false
 }
 
-ONLY include originalDescription if the menu shows one. The useIngredientsForSearch field helps us get better image results.
+ONLY include originalDescription if the menu shows one.
 All names MUST be in English.`
                         },
                         {

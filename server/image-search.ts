@@ -26,8 +26,6 @@ function getOpenAIClient(): OpenAI {
     return openai;
 }
 
-// Cache for simplified dish names to avoid repeated API calls
-const simplifiedNameCache = new Map<string, string>();
 
 export function isImageQuotaExceeded(): boolean {
     return imageQuotaExceeded;
@@ -48,100 +46,6 @@ function normalizeDishName(dishName: string): string {
         .replace(/\s+/g, ' ');   // "spaghetti   bolognese" → "spaghetti bolognese"
 }
 
-/**
- * Common restaurant/brand name patterns to strip from dish names
- */
-const RESTAURANT_PATTERNS = [
-    /^[\w\s]+'s\s+/i,           // "Landwer's ", "Joe's ", etc.
-    /^cafe\s+[\w]+\s+/i,        // "Cafe Renée "
-    /^restaurant\s+[\w]+\s+/i,  // "Restaurant XYZ "
-    /^chef\s+[\w]+'s?\s+/i,     // "Chef Mario's "
-    /^the\s+[\w]+\s+(?:special|signature)\s*/i, // "The House Special"
-];
-
-/**
- * Use OpenAI to simplify a fancy/foreign dish name into searchable terms
- * 
- * Examples:
- * - "Cafe Renée Petit Dejeuner" → "french breakfast eggs croissant"
- * - "Burger à l'American" → "american style burger"
- * - "Landwer's Granola Yogurt" → "granola yogurt bowl"
- */
-async function simplifyDishName(dishName: string): Promise<string> {
-    const cacheKey = dishName.toLowerCase().trim();
-    
-    // Check cache first
-    if (simplifiedNameCache.has(cacheKey)) {
-        const cached = simplifiedNameCache.get(cacheKey)!;
-        log(`[CACHE] Simplified name cache hit: "${dishName}" → "${cached}"`, 'image-search');
-        return cached;
-    }
-    
-    // First, try basic cleanup - strip known restaurant patterns
-    let cleanedName = dishName;
-    for (const pattern of RESTAURANT_PATTERNS) {
-        cleanedName = cleanedName.replace(pattern, '');
-    }
-    cleanedName = cleanedName.trim();
-    
-    // If the name looks simple enough (no special chars, short, English), use it directly
-    const looksSimple = /^[a-zA-Z\s]{3,30}$/.test(cleanedName) && 
-                        cleanedName.split(' ').length <= 4;
-    
-    if (looksSimple) {
-        log(`[SIMPLE] Dish name looks simple, using: "${cleanedName}"`, 'image-search');
-        simplifiedNameCache.set(cacheKey, cleanedName);
-        return cleanedName;
-    }
-    
-    // Use OpenAI for complex/foreign names
-    if (!process.env.OPENAI_API_KEY) {
-        log(`[NO API KEY] Using cleaned name: "${cleanedName}"`, 'image-search');
-        simplifiedNameCache.set(cacheKey, cleanedName);
-        return cleanedName;
-    }
-    
-    try {
-        // Don't rate-limit this heavily - it's a simple, cheap call
-        const response = await getOpenAIClient().chat.completions.create({
-            model: "gpt-4o-mini", // Cheap and fast model
-            messages: [
-                {
-                    role: "system",
-                    content: `Convert menu dish names to simple English search terms for finding food images. 
-Remove restaurant names, translate foreign words, keep only the actual food.
-Reply with ONLY the simplified search terms, 2-5 words max.
-
-Examples:
-- "Cafe Renée Petit Dejeuner" → "french breakfast plate"
-- "Burger à l'American" → "american cheeseburger"
-- "Landwer's Granola Yogurt" → "granola yogurt bowl"
-- "Hearty Italian Toast" → "italian bruschetta toast"
-- "Shakshuka Mediterranean Style" → "shakshuka eggs tomato"
-- "Eggs Benedict Royale" → "eggs benedict salmon"`
-                },
-                {
-                    role: "user",
-                    content: dishName
-                }
-            ],
-            max_tokens: 30,
-            temperature: 0.3
-        });
-        
-        const simplified = response.choices[0].message.content?.trim() || cleanedName;
-        log(`[OPENAI] Simplified: "${dishName}" → "${simplified}"`, 'image-search');
-        
-        // Cache the result
-        simplifiedNameCache.set(cacheKey, simplified);
-        return simplified;
-        
-    } catch (error) {
-        log(`[ERROR] Failed to simplify dish name: ${error}`, 'image-search');
-        simplifiedNameCache.set(cacheKey, cleanedName);
-        return cleanedName;
-    }
-}
 
 /**
  * Build search query for food images with AI-powered name simplification
@@ -152,7 +56,7 @@ Examples:
 function buildSearchQuery(simplifiedName: string): string {
     // Add "food dish" and negative keywords to exclude non-food results
     // Negative keywords help filter out buildings, packaging, logos, etc.
-    return `${simplifiedName} food dish -restaurant -building -storefront -packaging -logo -menu`;
+    return `${simplifiedName} -restaurant -building -storefront -packaging -logo -menu`;
 }
 
 // metadata about the image
@@ -259,10 +163,10 @@ export async function searchDishImage(dishName: string, _ingredients?: string[])
 
         // Simplify the dish name for better search results
         // This handles restaurant names, foreign terms, branded items, etc.
-        const simplifiedName = await simplifyDishName(dishName);
+
         
         // Build the search query with the simplified name
-        const query = buildSearchQuery(simplifiedName);
+        const query = buildSearchQuery(dishName);
         log(`Search query: "${query}" (original: "${dishName}")`, "image-search");
 
         // Construct the API URL with parameters
@@ -378,43 +282,4 @@ export async function searchDishImage(dishName: string, _ingredients?: string[])
         log(`Error searching for dish image: ${error instanceof Error ? error.message : String(error)}`, "image-search");
         return emptyResult;
     }
-}
-// ============================================
-// BATCH SEARCH (for multiple dishes)
-// ============================================
-
-/**
- * Search for images for multiple dishes
- * @param dishNames - Array of dish names
- * @returns Map of dish names to their image results
- */
-export async function searchMultipleDishImages(
-    dishNames: string[]
-): Promise<Map<string, DishImageResult>> {
-    const results = new Map<string, DishImageResult>();
-
-    // Process in parallel with a concurrency limit
-    const BATCH_SIZE = 5;
-
-    for (let i = 0; i < dishNames.length; i += BATCH_SIZE) {
-        const batch = dishNames.slice(i, i + BATCH_SIZE);
-
-        const batchResults = await Promise.all(
-            batch.map(async (dishName) => {
-                const result = await searchDishImage(dishName);
-                return { dishName, result };
-            })
-        );
-
-        for (const { dishName, result } of batchResults) {
-            results.set(dishName, result);
-        }
-
-        // Small delay between batches to be nice to the API
-        if (i + BATCH_SIZE < dishNames.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
-    }
-
-    return results;
 }
